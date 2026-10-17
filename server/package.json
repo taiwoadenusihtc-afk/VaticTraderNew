@@ -1,0 +1,19 @@
+{
+  "name": "vatictrader-server",
+  "version": "1.0.0",
+  "description": "VaticTrader backend — serves the app and provides persistence via Postgres",
+  "main": "server.js",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "compression": "^1.8.2",
+    "express": "^4.21.2",
+    "pg": "^8.23.0"
+  }
+}

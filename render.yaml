@@ -1,0 +1,38 @@
+# VaticTrader: one-click Render Blueprint.
+# Only the web service + Postgres are created. No questions are asked at deploy time.
+# Optional integrations (Stripe, email, Telegram, AI) are added later in
+# Render > Environment, or (Stripe and AI keys) inside the app's Admin panel.
+services:
+  - type: web
+    name: vatictrader
+    runtime: node
+    region: oregon          # must match the database region below
+    plan: starter
+    rootDir: server
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vatictrader-db
+          property: connectionString   # Internal URL, private network
+      - key: PGSSLMODE
+        value: require
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      # Optional, add in the Render dashboard to enable the OAuth brokers
+      # (Saxo, Schwab, TradeStation). Redirect URI to register with each:
+      #   <APP_BASE_URL>/api/oauth/callback/<saxo|schwab|tradestation>
+      # APP_BASE_URL, SAXO_APP_KEY, SAXO_APP_SECRET, SCHWAB_APP_KEY, SCHWAB_APP_SECRET,
+      # TRADESTATION_APP_KEY, TRADESTATION_APP_SECRET
+
+databases:
+  - name: vatictrader-db
+    region: oregon          # same region as the web service
+    plan: basic-256mb
+    databaseName: vatictrader
+    user: vatictrader
+    ipAllowList: []         # internal access only
