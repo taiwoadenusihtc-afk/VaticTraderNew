@@ -285,3 +285,18 @@ Both previously failed silently or left data behind.
 **Other fixes.** Missing icons, plan copy that wrongly said "any broker", an unauthenticated `/api/ai/status` call before sign in, unhandled clipboard rejections and a possible trade-log crash were fixed.
 
 **Not verified.** Broker, Stripe, email, Telegram and AI integrations were tested against local mocks only, not against the real providers.
+
+## Sign in with Alpaca (one-click, optional)
+
+Users can already connect by pasting their own Alpaca API keys. To also offer a one-click
+"Sign in with Alpaca" button (Alpaca Connect / OAuth):
+
+1. Register an app with Alpaca (Client ID and Client Secret) and whitelist the redirect URI
+   `https://YOUR-DOMAIN/api/oauth/callback/alpaca`.
+2. Set `ALPACA_APP_KEY` (Client ID), `ALPACA_APP_SECRET` (Client Secret) and `APP_BASE_URL` in Render, then redeploy.
+3. The Alpaca connect window then shows paper and live sign-in buttons. The access token is stored encrypted and
+   used as a Bearer token; everything else (live execution, backtest data, test order) works as with API keys.
+
+Scopes requested: `account:write trading data`. Not tested against the real Alpaca, only a local mock of the documented
+authorize/token/account endpoints. Alpaca must approve your app before other people can use live accounts through it.
+Optional overrides for testing: `ALPACA_AUTH_URL`, `ALPACA_TOKEN_URL`, `ALPACA_PAPER_BASE`, `ALPACA_LIVE_BASE`.

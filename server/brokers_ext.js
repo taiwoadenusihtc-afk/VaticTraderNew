@@ -421,6 +421,50 @@ module.exports = function registerExtraBrokers(ctx) {
     };
   });
 
+
+  // ------------------------------------------------- Alpaca "Sign in with Alpaca"
+  // Alpaca Connect (OAuth). Optional: users can still paste their own API keys. Needs a
+  // registered Alpaca app (Client ID + Secret) and the redirect URI
+  //   APP_BASE_URL + /api/oauth/callback/alpaca
+  // whitelisted in that app. The token is stored like an API key with api_key_id='oauth'.
+  const ALP = {
+    idEnv: 'ALPACA_APP_KEY', secretEnv: 'ALPACA_APP_SECRET',
+    authUrl: env.ALPACA_AUTH_URL || 'https://app.alpaca.markets/oauth/authorize',
+    tokenUrl: env.ALPACA_TOKEN_URL || 'https://api.alpaca.markets/oauth/token',
+    base: { paper: (env.ALPACA_PAPER_BASE || 'https://paper-api.alpaca.markets').replace(/\/$/, ''), live: (env.ALPACA_LIVE_BASE || 'https://api.alpaca.markets').replace(/\/$/, '') },
+  };
+  const alpConfigured = () => !!(env[ALP.idEnv] && env[ALP.secretEnv] && APP_BASE_URL);
+  const alpNeeds = () => [ALP.idEnv, ALP.secretEnv].filter(k => !env[k]).concat(APP_BASE_URL ? [] : ['APP_BASE_URL']);
+  app.get('/api/broker/alpaca/oauth/start', requireAuth, (req, res) => {
+    if (!alpConfigured()) return res.status(503).json({ error: `Sign in with Alpaca is not set up on this server yet. Whoever runs this VaticTrader needs to set ${alpNeeds().join(', ')}.`, needs: alpNeeds(), redirectUri: APP_BASE_URL ? redirectUri('alpaca') : null });
+    const mode = req.query.mode === 'live' ? 'live' : 'paper';
+    const q = { response_type: 'code', client_id: env[ALP.idEnv], redirect_uri: redirectUri('alpaca'), state: signState({ u: req.username, b: 'alpaca', m: mode }), scope: 'account:write trading data', env: mode };
+    res.json({ url: ALP.authUrl + '?' + new URLSearchParams(q).toString(), redirectUri: redirectUri('alpaca'), sandbox: mode === 'paper' });
+  });
+  app.get('/api/oauth/callback/alpaca', async (req, res) => {
+    const back = (q) => res.redirect('/?' + new URLSearchParams(q).toString() + '#broker');
+    if (req.query.error) return back({ broker_error: 'alpaca', why: clip(req.query.error_description || req.query.error, 120) });
+    const st = readState(req.query.state);
+    if (!st || st.b !== 'alpaca' || !req.query.code || !alpConfigured()) return back({ broker_error: 'alpaca', why: 'The sign-in expired or was not started here. Try again.' });
+    try {
+      const mode = st.m === 'live' ? 'live' : 'paper';
+      const r = await http(ALP.tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        body: new URLSearchParams({ grant_type: 'authorization_code', code: String(req.query.code), client_id: env[ALP.idEnv], client_secret: env[ALP.secretEnv], redirect_uri: redirectUri('alpaca') }).toString() });
+      if (!r.ok || !r.json || !r.json.access_token) return back({ broker_error: 'alpaca', why: 'Alpaca did not accept the sign-in code.' });
+      const token = String(r.json.access_token), base = ALP.base[mode];
+      const a = await http(base + '/v2/account', { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+      if (!a.ok) return back({ broker_error: 'alpaca', why: `Signed in, but Alpaca would not return a ${mode} account. Check that you approved a ${mode} account.` });
+      await pool.query(
+        `INSERT INTO broker_credentials (username, broker, api_key_id, api_secret_enc, base_url, connected_at) VALUES ($1,$2,$3,$4,$5,now())
+         ON CONFLICT (username, broker) DO UPDATE SET api_key_id=EXCLUDED.api_key_id, api_secret_enc=EXCLUDED.api_secret_enc, base_url=EXCLUDED.base_url, connected_at=now()`,
+        [st.u, 'alpaca', 'oauth', encryptSecret(token), base]);
+      back({ broker_connected: 'alpaca' });
+    } catch (e) {
+      console.error('alpaca oauth callback error:', e.message);
+      back({ broker_error: 'alpaca', why: 'Could not complete the sign-in. Try again.' });
+    }
+  });
+
   app.get('/api/broker/:id/oauth/start', requireAuth, (req, res) => {
     const id = req.params.id, cfg = OAUTH[id];
     if (!cfg) return res.status(404).json({ error: 'That broker does not use a sign-in window.' });
@@ -462,7 +506,7 @@ module.exports = function registerExtraBrokers(ctx) {
       const a = BrokerAdapters[id];
       out[id] = { kind: KINDS[id], configured: KINDS[id] === 'oauth' ? oauthConfigured(id) : true, needs: KINDS[id] === 'oauth' ? oauthNeeds(id) : [], redirectUri: KINDS[id] === 'oauth' && APP_BASE_URL ? redirectUri(id) : null, canTestOrder: !!a.canTestOrder, automatedExecution: false };
     });
-    out.alpaca = { kind: 'keys', configured: true, needs: [], canTestOrder: true, automatedExecution: true };
+    out.alpaca = { kind: 'keys', configured: true, needs: [], canTestOrder: true, automatedExecution: true, oauth: { configured: alpConfigured(), needs: alpNeeds(), redirectUri: APP_BASE_URL ? redirectUri('alpaca') : null } };
     out.etoro = { kind: 'keys', configured: true, needs: [], canTestOrder: true, automatedExecution: false };
     res.json({ brokers: out });
   });

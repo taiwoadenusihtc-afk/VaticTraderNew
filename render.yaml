@@ -26,6 +26,8 @@ services:
       # Optional, add in the Render dashboard to enable the OAuth brokers
       # (Saxo, Schwab, TradeStation). Redirect URI to register with each:
       #   <APP_BASE_URL>/api/oauth/callback/<saxo|schwab|tradestation>
+      # Alpaca one-click sign-in (Alpaca Connect app): ALPACA_APP_KEY (Client ID), ALPACA_APP_SECRET (Client Secret).
+      #   Redirect URI to whitelist in the Alpaca app: <APP_BASE_URL>/api/oauth/callback/alpaca
       # APP_BASE_URL, SAXO_APP_KEY, SAXO_APP_SECRET, SCHWAB_APP_KEY, SCHWAB_APP_SECRET,
       # TRADESTATION_APP_KEY, TRADESTATION_APP_SECRET
 

@@ -7392,10 +7392,10 @@ async function v8LoadBrokerCaps() {
   State.brokerCaps = {};
   try { const r = await fetch('/api/brokers/capabilities', { headers: authHeaders() }); if (r.ok) { State.brokerCaps = (await r.json()).brokers || {}; if (State.view === 'broker' || State.modal) render(); } } catch (e) { /* cards fall back to defaults */ }
 }
-async function v8BrokerOauthStart(id) {
+async function v8BrokerOauthStart(id, mode) {
   const b = brokerById(id);
   try {
-    const r = await fetch(`/api/broker/${id}/oauth/start`, { headers: authHeaders() }); const d = await r.json();
+    const r = await fetch(`/api/broker/${id}/oauth/start${mode ? '?mode=' + encodeURIComponent(mode) : ''}`, { headers: authHeaders() }); const d = await r.json();
     if (!r.ok) { toast(d.error || 'Could not start the sign-in.', 'err'); return; }
     await saveUser(); window.location.href = d.url;
   } catch (e) { toast('Could not reach the server.', 'err'); }
@@ -9860,6 +9860,7 @@ function renderModal() {
         <div class="modal" data-action="noop">
           <h3>Connect ${b.name} <span class="badge badge-long" style="margin-left:6px;">Real API</span></h3>
           <div class="sub">This is a genuine connection to Alpaca's real paper-trading API, free, uses simulated money, no real funds involved. <a href="https://alpaca.markets" target="_blank" rel="noopener" style="color:var(--brand);">Get free paper API keys →</a></div>
+          ${(() => { const oc = ((State.brokerCaps || {}).alpaca || {}).oauth; return oc && oc.configured ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 6px;"><button type="button" class="btn btn-primary" style="flex:1 1 180px;" data-action="alpaca-oauth-start" data-mode="paper">${icon('check')} ${T3('Sign in with Alpaca (paper)', 'تسجيل الدخول عبر ألباكا (تجريبي)')}</button><button type="button" class="btn btn-outline" style="flex:1 1 180px;" data-action="alpaca-oauth-start" data-mode="live">${T3('Sign in with Alpaca (live)', 'تسجيل الدخول عبر ألباكا (حقيقي)')}</button></div><div class="hint" style="margin:0 0 14px;">${T3('One click: approve access at Alpaca and come straight back. Or paste API keys below.', 'نقرة واحدة: وافق على الوصول لدى ألباكا وعد مباشرة. أو الصق مفاتيح API أدناه.')}</div>` : ''; })()}
           <form data-form="connect-alpaca">
             <div class="field"><label>API Key ID</label><input class="input" name="apiKeyId" placeholder="e.g. PKXXXXXXXXXXXXXXXXXX" required autocomplete="off"></div>
             <div class="field"><label>Secret Key</label><input class="input" type="password" name="apiSecretKey" placeholder="••••••••••••••••••••" required autocomplete="off"></div>
@@ -10727,6 +10728,7 @@ function onDelegatedClick(e) {
       break;
     }
     case 'broker-test-order': sendBrokerTestOrder(el.getAttribute('data-id')); break;
+    case 'alpaca-oauth-start': v8BrokerOauthStart('alpaca', el.getAttribute('data-mode')); break;
     case 'broker-oauth-start': v8BrokerOauthStart(el.getAttribute('data-id')); break;
     case 'refresh-broker': v8RefreshBroker(el.getAttribute('data-id')); break;
     case 'close-modal': State.modal = null; render(); break;

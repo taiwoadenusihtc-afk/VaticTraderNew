@@ -199,14 +199,18 @@ async function etoroRequest(baseUrl, apiKey, userKey, urlPath, options = {}) {
     }, options.headers || {}),
   });
 }
+// Accounts linked with "Sign in with Alpaca" (OAuth) are stored with api_key_id = 'oauth'
+// and the access token in the secret column; they authenticate with a Bearer header.
+function alpacaAuthHeaders(apiKeyId, apiSecretKey) {
+  if (apiKeyId === 'oauth') return { Authorization: 'Bearer ' + apiSecretKey };
+  return { 'APCA-API-KEY-ID': apiKeyId, 'APCA-API-SECRET-KEY': apiSecretKey };
+}
 async function alpacaRequest(baseUrl, apiKeyId, apiSecretKey, urlPath, options = {}) {
   return fetch(baseUrl + urlPath, {
     ...options,
     headers: Object.assign({
-      'APCA-API-KEY-ID': apiKeyId,
-      'APCA-API-SECRET-KEY': apiSecretKey,
       'Content-Type': 'application/json',
-    }, options.headers || {}),
+    }, alpacaAuthHeaders(apiKeyId, apiSecretKey), options.headers || {}),
   });
 }
 
@@ -254,7 +258,7 @@ function tfToAlpaca(tf) {
 async function alpacaGetBars(baseUrl, apiKeyId, apiSecretKey, symbol, timeframe, limit) {
   const tf = tfToAlpaca(timeframe);
   const url = `${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=${tf}&limit=${limit}`;
-  const res = await fetch(url, { headers: { 'APCA-API-KEY-ID': apiKeyId, 'APCA-API-SECRET-KEY': apiSecretKey } });
+  const res = await fetch(url, { headers: alpacaAuthHeaders(apiKeyId, apiSecretKey) });
   if (!res.ok) { const body = await res.text().catch(() => ''); throw new Error(`Alpaca bars request failed (${res.status}): ${body.slice(0, 200)}`); }
   const data = await res.json();
   const raw = data.bars || [];
@@ -1693,7 +1697,7 @@ async function fetchAlpacaHistory(creds, symbol, timeframe) {
   const cfg = MD_TF[timeframe] || MD_TF['15m'];
   const start = new Date(Date.now() - cfg.alpacaDays * 86400000).toISOString();
   const url = `${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=${tfToAlpaca(timeframe)}&start=${encodeURIComponent(start)}&limit=10000&adjustment=split&feed=iex`;
-  const r = await fetch(url, { headers: { 'APCA-API-KEY-ID': creds.key, 'APCA-API-SECRET-KEY': creds.secret } });
+  const r = await fetch(url, { headers: alpacaAuthHeaders(creds.key, creds.secret) });
   if (!r.ok) throw new Error(`Alpaca ${r.status}`);
   const j = await r.json();
   const raw = (j.bars || []).map(b => ({ t: Date.parse(b.t), open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
