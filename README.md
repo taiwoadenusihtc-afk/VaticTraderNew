@@ -300,3 +300,18 @@ Users can already connect by pasting their own Alpaca API keys. To also offer a 
 Scopes requested: `account:write trading data`. Not tested against the real Alpaca, only a local mock of the documented
 authorize/token/account endpoints. Alpaca must approve your app before other people can use live accounts through it.
 Optional overrides for testing: `ALPACA_AUTH_URL`, `ALPACA_TOKEN_URL`, `ALPACA_PAPER_BASE`, `ALPACA_LIVE_BASE`.
+
+## Sign in with eToro (one-click, read-only, optional)
+
+Users can already connect eToro by pasting their own API key and user key (demo account). To also offer
+"Sign in with eToro" (eToro SSO, OAuth 2.0 authorization code with mandatory PKCE S256):
+
+1. Register an app with eToro (builders.etoro.com app registration) to get a Client ID and Client Secret, and register the
+   redirect URI `https://YOUR-DOMAIN/api/oauth/callback/etoro` exactly.
+2. Set `ETORO_APP_KEY` (Client ID), `ETORO_APP_SECRET` (Client Secret) and `APP_BASE_URL` in Render, then redeploy.
+3. The eToro connect window then shows a sign-in button. Tokens are stored encrypted and refreshed automatically (access tokens last about 1 hour).
+
+This connection is read-only: it reads the account and places no orders. Default scope `openid etoro-public:real:read`
+(override with `ETORO_SCOPES`); the portfolio path defaults to `/api/v1/trading/info/portfolio` (`ETORO_PORTFOLIO_PATH`).
+Tested only against a local mock of eToro's documented endpoints. eToro describes SSO as a partner/enterprise integration,
+so your app may need their approval, and the scopes your app is allowed are fixed at registration.

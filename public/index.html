@@ -7348,9 +7348,9 @@ function renderBrokerCard(b) {
           <div><span class="l">Cash</span><span class="v">$${Number(conn.cash).toLocaleString()}</span></div>
           <div><span class="l">Buying power</span><span class="v">$${Number(conn.buyingPower).toLocaleString()}</span></div>
           <div><span class="l">Status</span><span class="v">${esc(conn.status)}</span></div>` : ''}
-          ${b.id === 'etoro' ? `
+          ${b.id === 'etoro' && conn.credit !== undefined ? `
           <div><span class="l">Demo credit</span><span class="v">$${Number(conn.credit).toLocaleString()}</span></div>` : ''}
-          ${b.id !== 'alpaca' && b.id !== 'etoro' ? `
+          ${b.id !== 'alpaca' && !(b.id === 'etoro' && conn.credit !== undefined) ? `
           <div><span class="l">Equity</span><span class="v">${v8Cur(conn.equity, conn.currency)}</span></div>
           <div><span class="l">Cash</span><span class="v">${v8Cur(conn.cash, conn.currency)}</span></div>
           <div><span class="l">Mode</span><span class="v">${esc(conn.mode || 'live')}</span></div>` : ''}
@@ -9879,6 +9879,7 @@ function renderModal() {
         <div class="modal" data-action="noop">
           <h3>Connect ${b.name} <span class="badge badge-long" style="margin-left:6px;">Real API</span></h3>
           <div class="sub">A genuine connection to eToro's real public API demo environment, simulated balances, no real funds. <a href="https://api-portal.etoro.com" target="_blank" rel="noopener" style="color:var(--brand);">Get free API keys →</a></div>
+          ${(() => { const oc = ((State.brokerCaps || {}).etoro || {}).oauth; return oc && oc.configured ? `<div style="margin:0 0 6px;"><button type="button" class="btn btn-primary btn-block" data-action="etoro-oauth-start">${icon('check')} ${T3('Sign in with eToro (read-only)', 'تسجيل الدخول عبر eToro (قراءة فقط)')}</button></div><div class="hint" style="margin:0 0 14px;">${T3('One click: approve access at eToro and come straight back. Or paste API keys below for the demo account.', 'نقرة واحدة: وافق على الوصول لدى eToro وعد مباشرة. أو الصق مفاتيح API أدناه للحساب التجريبي.')}</div>` : ''; })()}
           <form data-form="connect-etoro">
             <div class="field"><label>API Key</label><input class="input" name="apiKey" placeholder="x-api-key" required autocomplete="off"></div>
             <div class="field"><label>User Key</label><input class="input" type="password" name="userKey" placeholder="x-user-key" required autocomplete="off"></div>
@@ -10728,6 +10729,7 @@ function onDelegatedClick(e) {
       break;
     }
     case 'broker-test-order': sendBrokerTestOrder(el.getAttribute('data-id')); break;
+    case 'etoro-oauth-start': v8BrokerOauthStart('etoro'); break;
     case 'alpaca-oauth-start': v8BrokerOauthStart('alpaca', el.getAttribute('data-mode')); break;
     case 'broker-oauth-start': v8BrokerOauthStart(el.getAttribute('data-id')); break;
     case 'refresh-broker': v8RefreshBroker(el.getAttribute('data-id')); break;

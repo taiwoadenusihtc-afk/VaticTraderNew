@@ -28,6 +28,8 @@ services:
       #   <APP_BASE_URL>/api/oauth/callback/<saxo|schwab|tradestation>
       # Alpaca one-click sign-in (Alpaca Connect app): ALPACA_APP_KEY (Client ID), ALPACA_APP_SECRET (Client Secret).
       #   Redirect URI to whitelist in the Alpaca app: <APP_BASE_URL>/api/oauth/callback/alpaca
+      # eToro one-click sign-in (eToro SSO app, read-only): ETORO_APP_KEY (Client ID), ETORO_APP_SECRET (Client Secret).
+      #   Redirect URI to register with eToro: <APP_BASE_URL>/api/oauth/callback/etoro
       # APP_BASE_URL, SAXO_APP_KEY, SAXO_APP_SECRET, SCHWAB_APP_KEY, SCHWAB_APP_SECRET,
       # TRADESTATION_APP_KEY, TRADESTATION_APP_SECRET
 

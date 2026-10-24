@@ -465,6 +465,101 @@ module.exports = function registerExtraBrokers(ctx) {
     }
   });
 
+
+  // ------------------------------------------------- eToro "Sign in with eToro"
+  // eToro SSO (OAuth 2.0 authorization code + mandatory PKCE S256). Optional: users can still
+  // paste their own API key and user key. Needs an app registered with eToro (Client ID + Secret)
+  // and the redirect URI  APP_BASE_URL + /api/oauth/callback/etoro  registered exactly.
+  // Read-only: this connection reads the account; it never places orders.
+  const ETO = {
+    idEnv: 'ETORO_APP_KEY', secretEnv: 'ETORO_APP_SECRET',
+    authUrl: env.ETORO_AUTH_URL || 'https://www.etoro.com/sso',
+    tokenUrl: env.ETORO_TOKEN_URL || 'https://www.etoro.com/api/sso/v1/token',
+    apiBase: (env.ETORO_BASE_URL || 'https://public-api.etoro.com').replace(/\/$/, ''),
+    scope: env.ETORO_SCOPES || 'openid etoro-public:real:read',
+    portfolioPath: env.ETORO_PORTFOLIO_PATH || '/api/v1/trading/info/portfolio',
+  };
+  const etoConfigured = () => !!(env[ETO.idEnv] && env[ETO.secretEnv] && APP_BASE_URL);
+  const etoNeeds = () => [ETO.idEnv, ETO.secretEnv].filter(k => !env[k]).concat(APP_BASE_URL ? [] : ['APP_BASE_URL']);
+  const etoPkce = new Map(); // state nonce -> { verifier, nonce, exp }  (in memory, this instance only)
+  const sha256b64u = (v) => crypto.createHash('sha256').update(v).digest('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  function etoPrune() { const now = Date.now(); for (const [k, v] of etoPkce) if (v.exp < now) etoPkce.delete(k); }
+  async function etoTokenRequest(form) {
+    const basic = 'Basic ' + Buffer.from(`${env[ETO.idEnv]}:${env[ETO.secretEnv]}`).toString('base64');
+    return http(ETO.tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', Authorization: basic }, body: new URLSearchParams(form).toString() });
+  }
+  const etoPack = (tok, prev) => ({ access: tok.access_token, refresh: tok.refresh_token || (prev && prev.refresh) || null, exp: Date.now() + (num(tok.expires_in) || 3600) * 1000 });
+  async function etoAccessToken(creds) {
+    let t; try { t = JSON.parse(creds.secretPlain); } catch (e) { return { err: 'Stored eToro sign-in is unreadable. Disconnect and sign in again.' }; }
+    if (t.exp - 60000 > Date.now()) return { token: t.access };
+    if (!t.refresh || !etoConfigured()) return { err: 'eToro sign-in expired. Sign in again.' };
+    const r = await etoTokenRequest({ grant_type: 'refresh_token', refresh_token: t.refresh });
+    if (!r.ok || !r.json || !r.json.access_token) return { err: 'eToro sign-in expired. Sign in again.' };
+    const np = etoPack(r.json, t);
+    if (creds.username) await pool.query('UPDATE broker_credentials SET api_secret_enc=$3 WHERE username=$1 AND broker=$2', [creds.username, 'etoro', encryptSecret(JSON.stringify(np))]);
+    return { token: np.access };
+  }
+  const etoGet = (base, token, path) => http(base + path, { headers: { Authorization: 'Bearer ' + token, 'x-request-id': crypto.randomUUID(), Accept: 'application/json' } });
+  function etoSummary(j) {
+    const p = (j && (j.clientPortfolio || j)) || {};
+    const credit = num(p.credit);
+    return { accountNumber: null, status: 'ACTIVE', currency: 'USD', cash: str(credit), buyingPower: str(credit), portfolioValue: str(credit), equity: str(credit), lastEquity: null, tradingBlocked: false, mode: 'real',
+      note: 'Signed in with eToro. Read-only: VaticTrader reads this account and places no orders. Positions: ' + ((p.positions || []).length) };
+  }
+  // Signed-in connections are stored with api_key_id = 'oauth' and a token JSON in the secret column.
+  if (BrokerAdapters.etoro) {
+    const keyFetch = BrokerAdapters.etoro.fetchAccount.bind(BrokerAdapters.etoro);
+    BrokerAdapters.etoro.fetchAccount = async (creds) => {
+      if (creds.primary !== 'oauth') return keyFetch(creds);
+      const t = await etoAccessToken(creds); if (t.err) return fail(401, t.err);
+      const r = await etoGet(creds.baseUrl || ETO.apiBase, t.token, ETO.portfolioPath);
+      if (!r.ok) return fail(502, 'Could not read the eToro account.', clip(r.text, 200));
+      return { ok: true, accountSummary: etoSummary(r.json) };
+    };
+    const keyOrder = BrokerAdapters.etoro.placeTestOrder.bind(BrokerAdapters.etoro);
+    BrokerAdapters.etoro.placeTestOrder = async (creds) => {
+      if (creds.primary === 'oauth') return fail(400, 'This eToro connection is read-only, so no test order is sent. Connect with API keys to send a demo test order.');
+      return keyOrder(creds);
+    };
+  }
+  app.get('/api/broker/etoro/oauth/start', requireAuth, (req, res) => {
+    if (!etoConfigured()) return res.status(503).json({ error: `Sign in with eToro is not set up on this server yet. Whoever runs this VaticTrader needs to set ${etoNeeds().join(', ')}.`, needs: etoNeeds(), redirectUri: APP_BASE_URL ? redirectUri('etoro') : null });
+    etoPrune();
+    const verifier = crypto.randomBytes(48).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const nonce = crypto.randomBytes(12).toString('hex');
+    const state = signState({ u: req.username, b: 'etoro' });
+    const st = readState(state);
+    etoPkce.set(st.n, { verifier, nonce, exp: Date.now() + 10 * 60000 });
+    const q = { response_type: 'code', client_id: env[ETO.idEnv], redirect_uri: redirectUri('etoro'), scope: ETO.scope, state, nonce, code_challenge: sha256b64u(verifier), code_challenge_method: 'S256' };
+    res.json({ url: ETO.authUrl + '?' + new URLSearchParams(q).toString(), redirectUri: redirectUri('etoro') });
+  });
+  app.get('/api/oauth/callback/etoro', async (req, res) => {
+    const back = (q) => res.redirect('/?' + new URLSearchParams(q).toString() + '#broker');
+    if (req.query.error) return back({ broker_error: 'etoro', why: clip(req.query.error_description || req.query.error, 120) });
+    const st = readState(req.query.state);
+    const pk = st && etoPkce.get(st.n);
+    if (st) etoPkce.delete(st.n);
+    if (!st || st.b !== 'etoro' || !req.query.code || !pk || pk.exp < Date.now() || !etoConfigured()) return back({ broker_error: 'etoro', why: 'The sign-in expired or was not started here. Try again.' });
+    try {
+      const r = await etoTokenRequest({ grant_type: 'authorization_code', code: String(req.query.code), redirect_uri: redirectUri('etoro'), code_verifier: pk.verifier });
+      if (!r.ok || !r.json || !r.json.access_token) return back({ broker_error: 'etoro', why: 'eToro did not accept the sign-in code.' });
+      if (r.json.id_token) { // the token arrived over TLS from eToro's own endpoint; still check the nonce we sent
+        try { const claims = JSON.parse(Buffer.from(String(r.json.id_token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); if (claims.nonce && claims.nonce !== pk.nonce) return back({ broker_error: 'etoro', why: 'The sign-in could not be verified. Try again.' }); } catch (e) { /* unreadable id token: not needed for access */ }
+      }
+      const tok = etoPack(r.json);
+      const a = await etoGet(ETO.apiBase, tok.access, ETO.portfolioPath);
+      if (!a.ok) return back({ broker_error: 'etoro', why: 'Signed in, but eToro would not return account data. The approved scopes may not include account reads.' });
+      await pool.query(
+        `INSERT INTO broker_credentials (username, broker, api_key_id, api_secret_enc, base_url, connected_at) VALUES ($1,$2,$3,$4,$5,now())
+         ON CONFLICT (username, broker) DO UPDATE SET api_key_id=EXCLUDED.api_key_id, api_secret_enc=EXCLUDED.api_secret_enc, base_url=EXCLUDED.base_url, connected_at=now()`,
+        [st.u, 'etoro', 'oauth', encryptSecret(JSON.stringify(tok)), ETO.apiBase]);
+      back({ broker_connected: 'etoro' });
+    } catch (e) {
+      console.error('etoro oauth callback error:', e.message);
+      back({ broker_error: 'etoro', why: 'Could not complete the sign-in. Try again.' });
+    }
+  });
+
   app.get('/api/broker/:id/oauth/start', requireAuth, (req, res) => {
     const id = req.params.id, cfg = OAUTH[id];
     if (!cfg) return res.status(404).json({ error: 'That broker does not use a sign-in window.' });
@@ -507,7 +602,7 @@ module.exports = function registerExtraBrokers(ctx) {
       out[id] = { kind: KINDS[id], configured: KINDS[id] === 'oauth' ? oauthConfigured(id) : true, needs: KINDS[id] === 'oauth' ? oauthNeeds(id) : [], redirectUri: KINDS[id] === 'oauth' && APP_BASE_URL ? redirectUri(id) : null, canTestOrder: !!a.canTestOrder, automatedExecution: false };
     });
     out.alpaca = { kind: 'keys', configured: true, needs: [], canTestOrder: true, automatedExecution: true, oauth: { configured: alpConfigured(), needs: alpNeeds(), redirectUri: APP_BASE_URL ? redirectUri('alpaca') : null } };
-    out.etoro = { kind: 'keys', configured: true, needs: [], canTestOrder: true, automatedExecution: false };
+    out.etoro = { kind: 'keys', configured: true, needs: [], canTestOrder: true, automatedExecution: false, oauth: { configured: etoConfigured(), needs: etoNeeds(), redirectUri: APP_BASE_URL ? redirectUri('etoro') : null } };
     res.json({ brokers: out });
   });
 };
