@@ -1418,7 +1418,13 @@ async function runLiveTickForDeployment(dep, client) {
       if (!signal) return;
 
       const acctResult = await adapter.fetchAccount(creds);
-      if (!acctResult.ok) { await client.query('UPDATE live_deployments SET status=$1, last_error=$2, last_checked_at=now() WHERE id=$3', ['error', 'Could not read account equity', dep.id]); notifyUser(dep.username, 'broker', `${dep.strategy_name || dep.symbol}: broker unreachable`, 'The engine could not read your broker account, so this strategy has stopped. Check your broker connection and redeploy.', 'strategy:' + dep.strategy_id); return; }
+      if (!acctResult.ok) {
+        // Usually a brief broker or network problem. Keep watching and retry on the next check instead of stopping the strategy; tell the user once.
+        const msg = 'Could not read your broker account just now. Retrying automatically.';
+        await client.query('UPDATE live_deployments SET last_error=$1, last_checked_at=now() WHERE id=$2', [msg, dep.id]);
+        if (dep.last_error !== msg) notifyUser(dep.username, 'broker', `${dep.strategy_name || dep.symbol}: broker unreachable`, 'The engine could not read your broker account. The strategy is still watching and will retry on its next check. If this keeps happening, check your broker connection.', 'strategy:' + dep.strategy_id);
+        return;
+      }
       const equity = parseFloat(acctResult.accountSummary.equity) || 0;
       const entryPrice = bars[lastIdx].close;
       const lev = Math.min(5, Math.max(1, parseFloat(dep.leverage) || 1));
@@ -1446,7 +1452,7 @@ async function runLiveTickForDeployment(dep, client) {
         const errBody = await orderRes.json().catch(() => ({}));
         const rejMsg = (errBody.message || `Order rejected by ${adapter.name}`).slice(0, 500);
         await client.query('UPDATE live_deployments SET status=$1, last_error=$2, last_checked_at=now() WHERE id=$3', ['error', rejMsg, dep.id]);
-        notifyUser(dep.username, 'broker', `${dep.strategy_name || dep.symbol}: order rejected`, rejMsg + ' The strategy has stopped. Open it to redeploy.', 'strategy:' + dep.strategy_id);
+        notifyUser(dep.username, 'broker', `${dep.strategy_name || dep.symbol}: order rejected`, rejMsg + ' The strategy has stopped and will not retry, so an order is never sent twice. Check your broker for any order before you redeploy.', 'strategy:' + dep.strategy_id);
         return;
       }
       const order = await orderRes.json();
@@ -1546,6 +1552,242 @@ if (process.env.DISABLE_LIVE_TICK !== '1') {
   setInterval(() => { runLiveTick().catch(e => console.error('live tick loop error:', e.message)); }, LIVE_TICK_INTERVAL_MS);
 }
 
+
+// ---------------------------------------------------------------------------
+// SIMULATED FORWARD-TESTING. A demo-mode strategy runs on live prices with
+// simulated fills. No order is ever sent to any broker. Fills are priced at the
+// last bar's close when the rules turn true, exits use the later bars' highs and
+// lows (a stop wins if both levels are touched in one bar), and a 0.1% round
+// trip cost is charged. The virtual account is $10,000 and each trade uses the
+// strategy's position size as a share of it. Prices come from the user's Alpaca
+// data for plain US tickers when connected, otherwise from Yahoo Finance.
+// ---------------------------------------------------------------------------
+const SIM_TF_MS = { '1m': 60000, '5m': 300000, '15m': 900000, '30m': 1800000, '1H': 3600000, '4H': 14400000, '1D': 86400000 };
+const SIM_COST_PCT = 0.1, SIM_MAX_PER_USER = 25, SIM_VIRTUAL_EQUITY = 10000;
+const SIM_BARS_CACHE_MS = parseInt(process.env.SIM_BARS_CACHE_MS, 10) || 45000;
+const simBarsCache = new Map();
+async function getSimBars(username, symbol, timeframe) {
+  const key = `${symbol}|${timeframe}`;
+  const hit = simBarsCache.get(key);
+  if (hit && Date.now() - hit.at < SIM_BARS_CACHE_MS) return hit;
+  let bars = null, source = null, lastErr = null;
+  if (isAlpacaTradable(symbol)) {
+    try {
+      const cr = await pool.query('SELECT api_key_id, api_secret_enc FROM broker_credentials WHERE username=$1 AND broker=$2', [username, 'alpaca']);
+      if (cr.rows.length) { const b = await fetchAlpacaHistory({ key: cr.rows[0].api_key_id, secret: decryptSecret(cr.rows[0].api_secret_enc) }, symbol, timeframe); if (b.length >= 30) { bars = b; source = 'alpaca'; } }
+    } catch (e) { lastErr = e.message; }
+  }
+  if (!bars && !YAHOO_DISABLED) {
+    try { const b = await fetchYahooHistory(symbol, timeframe); if (b.length >= 30) { bars = b; source = 'yahoo'; } } catch (e) { lastErr = e.message; }
+  }
+  if (!bars) { if (hit) return hit; throw new Error(lastErr || 'No price data available.'); }
+  const out = { at: Date.now(), bars, source };
+  simBarsCache.set(key, out);
+  return out;
+}
+function simTradeView(t) {
+  const ep = parseFloat(t.entry_price), q = parseFloat(t.qty), cost = parseFloat(t.cost_pct) / 100;
+  const xp = t.exit_price === null || t.exit_price === undefined ? null : parseFloat(t.exit_price);
+  const move = xp === null ? null : (t.side === 'buy' ? (xp - ep) / ep : (ep - xp) / ep) - cost;
+  const notional = ep * q;
+  return { id: 'sim' + t.id, strategyId: t.strategy_id, strategyName: t.strategy_name, symbol: t.symbol, side: t.side, qty: q, entryPrice: ep, exitPrice: xp,
+    status: t.status, openedAt: t.opened_at, closedAt: t.closed_at, closeReason: t.close_reason, simulated: true,
+    pl: move === null ? null : notional * move, plPct: move === null ? null : move * 100 };
+}
+// Walks the bars after entry and returns the first exit, or null if the trade is still open.
+function simFindExit(trade, dep, bars) {
+  const long = trade.side === 'buy', ep = parseFloat(trade.entry_price);
+  const tp = parseFloat(dep.take_profit_pct) / 100, sl = parseFloat(dep.stop_loss_pct) / 100, tr = dep.trail_pct ? parseFloat(dep.trail_pct) / 100 : 0;
+  const tpP = long ? ep * (1 + tp) : ep * (1 - tp), slBase = long ? ep * (1 - sl) : ep * (1 + sl);
+  let peak = trade.trail_peak !== null && trade.trail_peak !== undefined ? parseFloat(trade.trail_peak) : ep;
+  const entryT = parseInt(trade.entry_bar_t, 10) || 0;
+  for (const b of bars) {
+    if (b.t <= entryT) continue;
+    let slP = slBase;
+    if (tr > 0) { const tl = long ? peak * (1 - tr) : peak * (1 + tr); slP = long ? Math.max(slBase, tl) : Math.min(slBase, tl); }
+    const hitSL = long ? b.low <= slP : b.high >= slP, hitTP = long ? b.high >= tpP : b.low <= tpP;
+    if (hitSL) { const fill = long ? Math.min(slP, b.open) : Math.max(slP, b.open); return { price: fill, reason: (tr > 0 && slP !== slBase) ? 'trailing_stop' : 'stop_loss', t: b.t, peak }; }
+    if (hitTP) { const fill = long ? Math.max(tpP, b.open) : Math.min(tpP, b.open); return { price: fill, reason: 'take_profit', t: b.t, peak }; }
+    peak = long ? Math.max(peak, b.high) : Math.min(peak, b.low);
+  }
+  return { price: null, peak };
+}
+async function runSimTickForDeployment(dep) {
+  try {
+    const { bars, source } = await getSimBars(dep.username, dep.symbol, dep.timeframe);
+    await pool.query('UPDATE sim_deployments SET last_checked_at=now(), last_error=NULL, data_source=$2 WHERE id=$1', [dep.id, source]);
+    if (dep.status === 'open') {
+      const tr = (await pool.query(`SELECT * FROM sim_trade_log WHERE username=$1 AND strategy_id=$2 AND status='open' ORDER BY id DESC LIMIT 1`, [dep.username, dep.strategy_id])).rows[0];
+      if (!tr) { await pool.query(`UPDATE sim_deployments SET status='watching', needs_reset=true WHERE id=$1`, [dep.id]); return; }
+      const ex = simFindExit(tr, dep, bars);
+      if (ex.price === null) { if (ex.peak !== parseFloat(tr.trail_peak)) await pool.query('UPDATE sim_trade_log SET trail_peak=$1 WHERE id=$2', [ex.peak, tr.id]); return; }
+      const closedAt = new Date(Math.min(Date.now(), ex.t + (SIM_TF_MS[dep.timeframe] || 60000)));
+      await pool.query(`UPDATE sim_trade_log SET status='closed', exit_price=$1, closed_at=$2, close_reason=$3 WHERE id=$4`, [ex.price, closedAt, ex.reason, tr.id]);
+      await pool.query(`UPDATE sim_deployments SET status='watching', needs_reset=true WHERE id=$1`, [dep.id]);
+      const v = simTradeView(Object.assign({}, tr, { exit_price: ex.price, status: 'closed', closed_at: closedAt }));
+      const why = ex.reason === 'take_profit' ? 'take profit was hit' : ex.reason === 'trailing_stop' ? 'the trailing stop closed it' : 'stop loss was hit';
+      notifyUser(dep.username, 'exit', `Simulated: ${dep.symbol} trade closed, ${v.pl >= 0 ? '+$' : '-$'}${Math.abs(v.pl).toFixed(2)}`, `${dep.strategy_name || 'Your strategy'} (demo, no real order): ${why} at ${ex.price.toFixed(2)}.`, 'portfolio');
+      return;
+    }
+    // watching
+    if (bars.length < 30) return;
+    const conditions = dep.entry_conditions;
+    const cache = buildIndicatorCache(bars, conditions);
+    const audit = buildAuditSnapshot(conditions, bars, cache);
+    if (dep.needs_reset) { if (!audit.signal) await pool.query('UPDATE sim_deployments SET needs_reset=false WHERE id=$1', [dep.id]); return; }
+    if (!audit.signal) return;
+    const last = bars[bars.length - 1], entry = last.close;
+    const side = dep.direction === 'short' ? 'sell' : 'buy';
+    const notional = SIM_VIRTUAL_EQUITY * (parseFloat(dep.position_size_pct) / 100);
+    const qty = notional / entry;
+    await pool.query(
+      `INSERT INTO sim_trade_log (username, strategy_id, strategy_name, symbol, side, qty, entry_price, entry_bar_t, trail_peak, status, cost_pct) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$7,'open',$9)`,
+      [dep.username, dep.strategy_id, dep.strategy_name, dep.symbol, side, qty, entry, last.t, SIM_COST_PCT]);
+    await pool.query(`UPDATE sim_deployments SET status='open' WHERE id=$1`, [dep.id]);
+    notifyUser(dep.username, 'fill', `Simulated: ${side === 'buy' ? 'bought' : 'sold short'} ${dep.symbol}`, `${dep.strategy_name || 'Your strategy'} (demo, no real order) entered at ${entry.toFixed(2)}.`, 'portfolio');
+  } catch (e) {
+    await pool.query('UPDATE sim_deployments SET last_error=$1, last_checked_at=now() WHERE id=$2', [String(e.message).slice(0, 300), dep.id]).catch(() => {});
+  }
+}
+async function runSimTick() {
+  const res = await pool.query(`SELECT * FROM sim_deployments WHERE status IN ('watching','open')`);
+  for (const dep of res.rows) await runSimTickForDeployment(dep);
+}
+if (process.env.DISABLE_LIVE_TICK !== '1') {
+  setInterval(() => { runSimTick().catch(e => console.error('sim tick loop error:', e.message)); }, LIVE_TICK_INTERVAL_MS);
+}
+app.post('/api/sim/deploy', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const tp = parseFloat(b.takeProfit), sl = parseFloat(b.stopLoss), sz = parseFloat(b.positionSizePct) || 2;
+  const trailRaw = parseFloat(b.trailingStopPct), trail = trailRaw > 0 ? trailRaw : null;
+  if (!b.strategyId || !b.symbol || !['long', 'short'].includes(b.direction === 'short' ? 'short' : 'long') || !Array.isArray(b.entryConditions) || !b.entryConditions.length) return res.status(400).json({ error: 'Missing required strategy fields.' });
+  if (!/^[A-Za-z0-9.\/=^\-]{1,24}$/.test(String(b.symbol))) return res.status(400).json({ error: 'Invalid symbol.' });
+  if (!MD_TF[b.timeframe]) return res.status(400).json({ error: 'Unsupported timeframe.' });
+  if (!(tp > 0 && tp <= 100) || !(sl > 0 && sl <= 100) || !(sz > 0 && sz <= 100)) return res.status(400).json({ error: 'Take profit, stop loss and size must be between 0 and 100.' });
+  if (trail !== null && (trail < 0.05 || trail > 50)) return res.status(400).json({ error: 'Trailing stop must be between 0.05% and 50%.' });
+  try {
+    const n = await pool.query(`SELECT COUNT(*)::int AS n FROM sim_deployments WHERE username=$1 AND status IN ('watching','open') AND strategy_id <> $2`, [req.username, String(b.strategyId)]);
+    if (n.rows[0].n >= SIM_MAX_PER_USER) return res.status(422).json({ error: `Simulated forward-testing is limited to ${SIM_MAX_PER_USER} strategies at once. Stop one first.` });
+    await pool.query(
+      `INSERT INTO sim_deployments (username, strategy_id, strategy_name, symbol, timeframe, direction, entry_conditions, take_profit_pct, stop_loss_pct, position_size_pct, trail_pct, status, needs_reset)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'watching',false)
+       ON CONFLICT (username, strategy_id) DO UPDATE SET strategy_name=$3, symbol=$4, timeframe=$5, direction=$6, entry_conditions=$7, take_profit_pct=$8, stop_loss_pct=$9, position_size_pct=$10, trail_pct=$11, status='watching', needs_reset=false, last_error=NULL`,
+      [req.username, String(b.strategyId), String(b.strategyName || '').slice(0, 120), String(b.symbol), b.timeframe, b.direction === 'short' ? 'short' : 'long', JSON.stringify(b.entryConditions), tp, sl, sz, trail]);
+    // Any trade still open from an earlier run of this strategy is closed out so only one is ever open.
+    await pool.query(`UPDATE sim_trade_log SET status='closed', closed_at=now(), close_reason='redeployed' WHERE username=$1 AND strategy_id=$2 AND status='open'`, [req.username, String(b.strategyId)]);
+    trackEvent(req.username, 'sim_deploy');
+    res.json({ ok: true });
+  } catch (e) { console.error('sim deploy error:', e.message); res.status(500).json({ error: 'Could not start simulated forward-testing.' }); }
+});
+app.post('/api/sim/stop/:strategyId', requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.strategyId).slice(0, 80);
+    await pool.query(`UPDATE sim_deployments SET status='stopped' WHERE username=$1 AND strategy_id=$2`, [req.username, id]);
+    const open = await pool.query(`SELECT t.id, d.symbol, d.timeframe FROM sim_trade_log t JOIN sim_deployments d ON d.username=t.username AND d.strategy_id=t.strategy_id WHERE t.username=$1 AND t.strategy_id=$2 AND t.status='open'`, [req.username, id]);
+    for (const t of open.rows) {
+      const hit = simBarsCache.get(`${t.symbol}|${t.timeframe}`);
+      const px = hit && hit.bars.length ? hit.bars[hit.bars.length - 1].close : null;
+      await pool.query(`UPDATE sim_trade_log SET status='closed', closed_at=now(), exit_price=$2, close_reason='stopped' WHERE id=$1`, [t.id, px]);
+    }
+    res.json({ ok: true });
+  } catch (e) { console.error('sim stop error:', e.message); res.status(500).json({ error: 'Could not stop simulated forward-testing.' }); }
+});
+app.get('/api/sim/status', requireAuth, async (req, res) => {
+  try { res.json({ deployments: (await pool.query('SELECT strategy_id, symbol, timeframe, status, last_error, last_checked_at, data_source, created_at FROM sim_deployments WHERE username=$1', [req.username])).rows }); }
+  catch (e) { res.status(500).json({ error: 'Could not load simulated status.' }); }
+});
+app.get('/api/sim/trades', requireAuth, async (req, res) => {
+  try {
+    const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 500));
+    const r = await pool.query('SELECT * FROM sim_trade_log WHERE username=$1 ORDER BY opened_at DESC, id DESC LIMIT $2', [req.username, limit]);
+    res.json({ trades: r.rows.map(simTradeView) });
+  } catch (e) { console.error('sim trades error:', e.message); res.status(500).json({ error: 'Could not load simulated trades.' }); }
+});
+
+
+// ------------------------------------------------------------ usage analytics (admin dashboard)
+// Aggregate counts only. A user is stored as a salted one-way hash (never the username, IP or device),
+// detailed rows are deleted after 90 days. Browsers that send Do Not Track / Global Privacy Control are not counted.
+const USAGE_SALT = crypto.createHash('sha256').update('usage:' + ENCRYPTION_KEY_RAW).digest('hex');
+const USAGE_EVENT_RE = /^[a-z0-9_:-]{1,40}$/;
+const usageRate = new Map(); // username -> { windowStart, n }
+let usageDistinctToday = { day: '', set: new Set() };
+function usageHash(username) { return crypto.createHash('sha256').update(USAGE_SALT + ':' + username).digest('hex').slice(0, 20); }
+async function trackEvent(username, event) {
+  try {
+    if (!username || !USAGE_EVENT_RE.test(event)) return false;
+    const day = new Date().toISOString().slice(0, 10);
+    if (usageDistinctToday.day !== day) usageDistinctToday = { day, set: new Set() };
+    if (!usageDistinctToday.set.has(event)) {
+      if (usageDistinctToday.set.size >= 120) return false; // caps how many different event names can exist per day
+      usageDistinctToday.set.add(event);
+    }
+    await pool.query('INSERT INTO usage_daily (day, event, count) VALUES ($1,$2,1) ON CONFLICT (day, event) DO UPDATE SET count = usage_daily.count + 1', [day, event]);
+    await pool.query('INSERT INTO usage_event_users (day, event, uhash) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [day, event, usageHash(username)]);
+    return true;
+  } catch (e) { return false; }
+}
+app.post('/api/track', requireAuth, async (req, res) => {
+  if (req.headers['dnt'] === '1' || req.headers['sec-gpc'] === '1') return res.json({ ok: true, skipped: 'dnt' });
+  const ev = String((req.body && req.body.event) || '');
+  const now = Date.now(); const r = usageRate.get(req.username);
+  if (!r || now - r.t > 60000) usageRate.set(req.username, { t: now, n: 1 });
+  else if (++r.n > 120) return res.json({ ok: true, skipped: 'rate' });
+  if (!USAGE_EVENT_RE.test(ev)) return res.status(400).json({ error: 'bad event' });
+  await trackEvent(req.username, ev);
+  res.json({ ok: true });
+});
+async function pruneUsage() {
+  try {
+    await pool.query(`INSERT INTO usage_daily_users (day, event, users)
+      SELECT day, event, COUNT(*)::int FROM usage_event_users WHERE day < current_date - 90 GROUP BY day, event
+      ON CONFLICT (day, event) DO UPDATE SET users = EXCLUDED.users`);
+    await pool.query('DELETE FROM usage_event_users WHERE day < current_date - 90');
+  } catch (e) { console.error('usage prune error:', e.message); }
+}
+app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const days = Math.max(7, Math.min(90, parseInt(req.query.days, 10) || 30));
+    const q = (sql, p) => pool.query(sql, p).then(r => r.rows);
+    const [tot] = await q(`SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '1 day')::int AS new1,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS new7,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS new30,
+        COUNT(*) FILTER (WHERE plan_tier <> 'free')::int AS paid,
+        COUNT(*) FILTER (WHERE plan_tier = 'free' AND trial_ends_at > now())::int AS trialing
+      FROM users`);
+    const [act] = await q(`SELECT
+        COUNT(DISTINCT username) FILTER (WHERE last_seen_at > now() - interval '1 day')::int AS d1,
+        COUNT(DISTINCT username) FILTER (WHERE last_seen_at > now() - interval '7 days')::int AS d7,
+        COUNT(DISTINCT username) FILTER (WHERE last_seen_at > now() - interval '30 days')::int AS d30
+      FROM sessions`);
+    const signups = await q(`SELECT to_char(g.d,'YYYY-MM-DD') AS day, COALESCE(c.n,0)::int AS n
+      FROM generate_series(current_date - ($1::int - 1), current_date, '1 day') AS g(d)
+      LEFT JOIN (SELECT created_at::date AS d, COUNT(*) AS n FROM users GROUP BY 1) c ON c.d = g.d::date ORDER BY g.d`, [days]);
+    // distinct users per day and event: recent detail rows, plus the collapsed totals for older days
+    const usersPer = await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, event, users FROM (
+        SELECT day, event, COUNT(*)::int AS users FROM usage_event_users WHERE day >= current_date - ($1::int - 1) GROUP BY day, event
+        UNION ALL SELECT day, event, users FROM usage_daily_users WHERE day >= current_date - ($1::int - 1)
+          AND NOT EXISTS (SELECT 1 FROM usage_event_users u WHERE u.day = usage_daily_users.day AND u.event = usage_daily_users.event)
+      ) x`, [days]);
+    const counts = await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, event, count FROM usage_daily WHERE day >= current_date - ($1::int - 1)`, [days]);
+    const visitorsByDay = {}; usersPer.filter(r => r.event === 'visit').forEach(r => { visitorsByDay[r.day] = r.users; });
+    const series = signups.map(s => ({ day: s.day, signups: s.n, visitors: visitorsByDay[s.day] || 0 }));
+    // per event totals over the window (distinct users across the whole window come from the detail table, so at most 90 days)
+    const evDistinct = await q(`SELECT event, COUNT(DISTINCT uhash)::int AS users FROM usage_event_users WHERE day >= current_date - ($1::int - 1) GROUP BY event`, [days]);
+    const distinctMap = {}; evDistinct.forEach(r => { distinctMap[r.event] = r.users; });
+    const totals = {}; counts.forEach(r => { totals[r.event] = (totals[r.event] || 0) + r.count; });
+    const events = Object.keys(totals).filter(e => e !== 'visit').map(e => ({ event: e, count: totals[e], users: distinctMap[e] || 0 })).sort((a, b) => b.count - a.count);
+    const stage = (e) => ({ event: e, users: distinctMap[e] || 0 });
+    const funnel = [stage('visit'), stage('signup'), stage('strategy_created'), stage('backtest_run'), stage('sim_deploy'), stage('broker_connect'), stage('live_deploy')];
+    const [live] = await q(`SELECT (SELECT COUNT(*) FROM live_deployments WHERE status IN ('watching','in_position'))::int AS live_active, (SELECT COUNT(*) FROM sim_deployments WHERE status IN ('watching','in_position'))::int AS sim_active, (SELECT COUNT(*) FROM live_trade_log)::int AS live_trades, (SELECT COUNT(*) FROM sim_trade_log)::int AS sim_trades`).catch(() => [{}]);
+    let strategies = null;
+    try { const r = await q(`SELECT COALESCE(SUM(jsonb_array_length(value::jsonb->'strategies')),0)::int AS n FROM kv_shared WHERE key LIKE 'user:%' AND jsonb_typeof(value::jsonb->'strategies')='array'`); strategies = r[0].n; } catch (e) {}
+    const [first] = await q('SELECT to_char(MIN(day),\'YYYY-MM-DD\') AS d FROM usage_daily');
+    res.json({ days, totals: tot, active: act, series, events, funnel, live: live || {}, strategies, trackingSince: first && first.d || null });
+  } catch (e) { console.error('admin usage error:', e.message); res.status(500).json({ error: 'Could not load usage.' }); }
+});
+
 app.post('/api/live/deploy', requireAuth, async (req, res) => {
   const { strategyId, strategyName, symbol, timeframe, direction, entryConditions, takeProfit, stopLoss, positionSizePct } = req.body || {};
   const trailRaw = parseFloat((req.body || {}).trailingStopPct);
@@ -1590,6 +1832,7 @@ app.post('/api/live/deploy', requireAuth, async (req, res) => {
          status='watching', entry_order_id=NULL, entry_price=NULL, qty=NULL, opened_at=NULL, closed_at=NULL, last_error=NULL`,
       [req.username, strategyId, strategyName || '', symbol, timeframe || '15m', direction, JSON.stringify(entryConditions), takeProfit, stopLoss, positionSizePct, repeat, maxLosses, trailPct, leverage]
     );
+    trackEvent(req.username, 'live_deploy');
     res.json({ ok: true, status: 'watching' });
   } catch (e) {
     console.error('live deploy error:', e.message);
@@ -1609,7 +1852,7 @@ app.get('/api/live/status', requireAuth, async (req, res) => {
 app.get('/api/live/trades/:strategyId', requireAuth, async (req, res) => {
   const result = await pool.query(
     `SELECT symbol, side, qty, entry_price, opened_at, exit_price, closed_at, status
-     FROM live_trade_log WHERE username=$1 AND strategy_id=$2 ORDER BY opened_at DESC LIMIT 200`,
+     FROM live_trade_log WHERE username=$1 AND strategy_id=$2 ORDER BY opened_at DESC LIMIT 5000`,
     [req.username, req.params.strategyId]
   );
   res.json({ trades: result.rows });
@@ -3247,6 +3490,7 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     const token = await createSession(username, req);
+    trackEvent(username, 'signup');
     res.json({ token, username });
   } catch (e) {
     console.error('register error:', e.message);
@@ -3816,6 +4060,7 @@ app.post('/api/broker/:brokerId/connect', requireAuth, async (req, res) => {
   try {
     const result = await adapter.connect(req.body);
     if (!result.ok) return res.status(result.status || 502).json({ error: result.error, detail: result.detail });
+    trackEvent(req.username, 'broker_connect');
     const { primary, secretPlain, baseUrl } = result.credsForStorage;
     const encSecret = encryptSecret(secretPlain);
     await pool.query(
@@ -4258,6 +4503,7 @@ async function runDailySummaries() {
   }
 }
 if (process.env.DISABLE_LIVE_TICK !== '1') {
+  setInterval(() => { pruneUsage(); }, 6 * 3600000); setTimeout(() => { pruneUsage(); }, 60000);
   setInterval(() => { runAlertsTick().catch(e => console.error('alerts tick error:', e.message)); }, 60000);
   setInterval(() => { runDailySummaries().catch(e => console.error('daily summary loop error:', e.message)); }, 10 * 60000);
 }
@@ -4271,7 +4517,7 @@ function tradeView(t) {
 }
 app.get('/api/live/journal', requireAuth, async (req, res) => {
   try {
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 60));
+    const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 60));
     const r = await pool.query('SELECT * FROM live_trade_log WHERE username=$1 ORDER BY opened_at DESC, id DESC LIMIT $2', [req.username, limit]);
     res.json({ trades: r.rows.map(tradeView) });
   } catch (e) { console.error('journal error:', e.message); res.status(500).json({ error: 'Could not load the journal.' }); }

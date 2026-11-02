@@ -2488,6 +2488,23 @@ const TEMPLATE_RECIPES_2 = [
   { n: '30m Stochastic Range Buy', tf: '30m', dir: 'long', tp: 0.35, sl: 0.22, sz: 1, trail: false, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'EUR/GBP', 'EUR/JPY', 'GBP/JPY'], conds: [c_('stochastic', 'is below', 20), c_('adx', 'is below', 20)], basis: 'Oscillators work best when there is no trend, so this only buys oversold readings while ADX shows a range.', blurb: 'A 30-minute day trade that buys oversold readings in a range.' },
   { n: '1H Keltner Breakout', tf: '1H', dir: 'long', tp: 0.8, sl: 0.45, sz: 1, trail: true, tpct: 0.35, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/JPY', 'GBP/JPY'], conds: [c_('keltner', 'price breaks upper band'), c_('adx', 'is above', 20)], basis: 'Keltner Channels use ATR, so the bands adapt to volatility. A close outside the upper band with a trend present marks a momentum breakout.', blurb: 'An hourly day trade on a volatility breakout.' },
 ];
+
+// ---------------- Day trading and scalping set (confluence entries, costs-aware targets) ----------------
+// Each rule needs two or three conditions to agree, which keeps trade counts sane and filters the weakest signals.
+// Targets are sized well above the default backtest costs (0.1% round trip). Forex versions use wider, spread-aware targets.
+TEMPLATE_RECIPES_2.push(
+  { n: 'VWAP Reclaim Trend Scalp', tf: '5m', dir: 'long', tp: 0.45, sl: 0.4, sz: 0.75, trail: false, syms: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [c_('vwap', 'price crosses above'), c_('pricevsema', 'is above'), c_('adx', 'is above', 20)], fam: 'Trend', basis: 'Buys a push back above VWAP only when price is also above its 20 EMA and the trend has some strength (ADX above 20). The filters skip weak, choppy reclaims. Test with realistic fees.', blurb: 'VWAP reclaim, filtered by trend and strength.' },
+  { n: 'Range Reversion Scalp (Long)', tf: '5m', dir: 'long', tp: 0.35, sl: 0.4, sz: 0.75, trail: false, syms: ['SPY', 'QQQ', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [c_('bbands', 'price breaks lower band'), c_('rsi', 'is below', 30), c_('adx', 'is below', 22)], fam: 'Mean reversion', basis: 'Buys a stretch below the lower Bollinger Band, but only when RSI is oversold and ADX says the market is ranging, not trending. The target is smaller than the stop, so it needs a high win rate to break even. Check that on real data before using it.', blurb: 'Buys range-bound dips (band break, RSI under 30, low ADX).' },
+  { n: 'Range Reversion Scalp (Short)', tf: '5m', dir: 'short', tp: 0.35, sl: 0.4, sz: 0.75, trail: false, syms: ['SPY', 'QQQ', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [c_('bbands', 'price breaks upper band'), c_('rsi', 'is above', 70), c_('adx', 'is below', 22)], fam: 'Mean reversion', basis: 'Sells a stretch above the upper Bollinger Band when RSI is overbought and ADX says the market is ranging. Target smaller than stop, so the win rate has to carry it. Short selling needs a broker and account that allow it.', blurb: 'Fades range-bound spikes (band break, RSI over 70, low ADX).' },
+  { n: 'VWAP Stretch Reversion', tf: '5m', dir: 'long', tp: 0.3, sl: 0.4, sz: 0.75, trail: false, syms: ['SPY', 'QQQ', 'NVDA', 'AAPL'], conds: [c_('vwapdist', 'is below', -0.35), c_('rsi', 'is below', 33), c_('adx', 'is below', 30)], fam: 'Mean reversion', basis: 'Buys when price is more than 0.35% below VWAP with RSI oversold and no strong trend, aiming for a partial snap back toward VWAP. Smaller target than stop, so it depends on a high win rate.', blurb: 'Buys a stretch below VWAP in a non-trending market.' },
+  { n: 'Volume Breakout Day Trade', tf: '15m', dir: 'long', tp: 0.9, sl: 0.6, sz: 1, trail: true, tpct: 0.4, syms: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [c_('breakout', 'breaks above N-bar high', 20), c_('volume', 'is above average by', 170), c_('adx', 'is above', 20)], fam: 'Breakout', basis: 'Buys a 20-bar high break that comes with a volume surge and a trending market. Fewer trades, a larger target than stop, and a trailing stop to protect open gains. Win rate is usually lower for breakouts, and the payoff ratio does the work.', blurb: 'Breakout with volume and trend confirmation.' },
+  { n: 'Trend Pullback Day Trade (Long)', tf: '15m', dir: 'long', tp: 0.7, sl: 0.5, sz: 1, trail: false, syms: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [{ indicator: 'custom_equation', language: 'native', operator: '', value: 'CLOSE > EMA(50) AND RSI(14) < 40' }, c_('adx', 'is above', 22)], fam: 'Trend', basis: 'In an uptrend (price above its 50 EMA, ADX above 22), buys a short-term RSI dip under 40. A common buy-the-dip structure with a modest reward to risk.', blurb: 'Buys dips inside a strong uptrend.' },
+  { n: 'Trend Pullback Day Trade (Short)', tf: '15m', dir: 'short', tp: 0.7, sl: 0.5, sz: 1, trail: false, syms: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [{ indicator: 'custom_equation', language: 'native', operator: '', value: 'CLOSE < EMA(50) AND RSI(14) > 60' }, c_('adx', 'is above', 22)], fam: 'Trend', basis: 'In a downtrend (price below its 50 EMA, ADX above 22), sells a short-term RSI bounce above 60. Short selling needs a broker and account that allow it.', blurb: 'Sells bounces inside a strong downtrend.' },
+  { n: 'MACD Trend Day Trade', tf: '15m', dir: 'long', tp: 0.8, sl: 0.5, sz: 1, trail: true, tpct: 0.35, syms: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'BTC/USD', 'ETH/USD'], conds: [c_('macd', 'crosses above signal'), c_('adx', 'is above', 25), c_('pricevssma', 'is above')], fam: 'Trend', basis: 'Buys a MACD bullish cross only when trend strength is high and price is above its 20 SMA. Combining the three cuts down on whipsaw crosses.', blurb: 'MACD cross filtered by ADX and price above SMA.' },
+  { n: 'Forex Range Reversion (Long)', tf: '15m', dir: 'long', tp: 0.2, sl: 0.25, sz: 1, trail: false, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD'], conds: [c_('bbands', 'price breaks lower band'), c_('rsi', 'is below', 35), c_('adx', 'is below', 25)], fam: 'Mean reversion', basis: 'Buys a lower-band stretch on 15-minute forex when RSI is below 35 and ADX is low. Forex costs are mostly spread. The default backtest fee is higher than most forex spreads, so set your own cost in Settings for a fair result.', blurb: 'Buys range-bound forex dips.' },
+  { n: 'Forex Range Reversion (Short)', tf: '15m', dir: 'short', tp: 0.2, sl: 0.25, sz: 1, trail: false, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD'], conds: [c_('bbands', 'price breaks upper band'), c_('rsi', 'is above', 65), c_('adx', 'is below', 25)], fam: 'Mean reversion', basis: 'Sells an upper-band stretch on 15-minute forex when RSI is above 65 and ADX is low. Set your own cost in Settings for a fair backtest.', blurb: 'Fades range-bound forex spikes.' },
+  { n: 'Forex Trend Pullback', tf: '15m', dir: 'long', tp: 0.3, sl: 0.2, sz: 1, trail: false, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD'], conds: [{ indicator: 'custom_equation', language: 'native', operator: '', value: 'CLOSE > EMA(50) AND RSI(14) < 42' }, c_('adx', 'is above', 22)], fam: 'Trend', basis: 'Buys RSI dips inside a forex uptrend (above 50 EMA, ADX above 22) with a 1.5 to 1 reward to risk, so it does not need a very high win rate to break even.', blurb: 'Buys forex dips inside an uptrend.' }
+);
 (function buildRecipeTemplates() {
   const seen = new Set(TEMPLATES.map(t => t.name));
   const lists = { 'US stocks': [], 'UK stocks': [], Forex: [], Crypto: [] };
@@ -2654,7 +2671,8 @@ async function saveUser() {
   // the JSON synchronously here (not inside the .then) preserves the exact
   // state as of THIS call, while chaining onto saveUserChain guarantees writes
   // land in the Postgres row in the same order they were initiated.
-  const snapshot = JSON.stringify(State.user);
+  // The full per-trade backtest log lives in memory and is rebuilt from real history on open; only the newest 150 rows are stored, to stay under the request size limit.
+  const snapshot = JSON.stringify(State.user, (k, v) => (k === 'tradeLog' && Array.isArray(v) && v.length > 150) ? v.slice(0, 150) : v);
   const username = State.user.username;
   const thisSave = saveUserChain.then(() => saveUserProfileChecked(username, snapshot)).catch(() => false);
   saveUserChain = thisSave.then(() => {}, () => {}); // chain continues regardless, so later calls still wait their turn
@@ -2709,6 +2727,7 @@ async function saveStrategyChecked(d, isNew, editingId) {
   } else {
     d.id = uid(); d.createdAt = Date.now();
     State.user.strategies.push(d);
+    track('strategy_created');
     logActivity('strategy', `Created "${d.name}"`);
   }
   const ok = await saveUser();
@@ -2904,6 +2923,7 @@ async function loadCommunity() {
 }
 async function publishStrategy(s) {
   if (!s.backtest) { toast('Backtest this strategy before publishing.', 'err'); return; }
+  track('publish_strategy');
   const entry = {
     id: uid(), strategyId: s.id, ownerUsername: State.user.username, ownerName: State.user.name, color: brandColorFor(State.user.username), ownerPhotoUrl: State.user.photoUrl || null,
     name: s.name, symbol: s.symbol, timeframe: s.timeframe, direction: s.direction, entryConditions: s.entryConditions,
@@ -2951,6 +2971,7 @@ async function copyCommunityStrategy(entryId) {
   });
   d.id = uid(); d.createdAt = Date.now(); d.copiedFromId = entry.id;
   State.user.strategies.push(d);
+  track('copy_strategy');
   logActivity('strategy', `Copied "${entry.name}" from ${entry.ownerName}`);
   const ok = await saveUser();
   if (!ok) return; // rejected (e.g. free-tier limit): handleUpgradeRequired already reverted the addition and showed the prompt
@@ -2958,7 +2979,8 @@ async function copyCommunityStrategy(entryId) {
   await storeAtomic('community-index', 'incrementEntryField', { id: entryId, field: 'copies', by: 1 }, async () => {
     storeSet('community-index', JSON.stringify(list), true).catch(() => {});
   });
-  render(); toast(`Copied "${entry.name}" into My Strategies as a draft.`, 'ok');
+  State.detailId = d.id; State.view = 'detail'; window.scrollTo(0, 0);
+  render(); toast(`Copied. This is your own draft, not live. Run a backtest to see how it performs for you.`, 'ok');
   checkAchievements();
   creditStrategyCreator(entryId);
 }
@@ -5071,9 +5093,18 @@ function noDataBacktest(reason) {
 function applyBacktest(target, id) {
   const bt = runBacktest(target);
   if (bt.noData) { target.backtest = null; target.backtestError = bt.dataNote; return null; }
+  track('backtest_run');
   target.backtest = bt; target.backtestError = null; if (id) bt._strategyId = id;
   return bt;
 }
+/* Date and time for a trade, in the viewer's own time zone: "02 Nov 2026, 16:03:12". */
+function fmtTs(v) {
+  if (v === null || v === undefined || v === '') return '<span class="faint">N/A</span>';
+  const d = new Date(v); if (!isFinite(d)) return '<span class="faint">N/A</span>';
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], z = n => (n < 10 ? '0' : '') + n;
+  return `${z(d.getDate())} ${MON[d.getMonth()]} ${d.getFullYear()}, ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+}
+function tzNote() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'your local time'; } catch (e) { return 'your local time'; } }
 function runBacktest(strat) {
   const basePrice = symbolBasePrice(strat.symbol);
   // The synthetic PRICE HISTORY is seeded by symbol+timeframe ONLY, not by
@@ -5144,7 +5175,7 @@ function runBacktest(strat) {
     if (useReal && bars[t.exitBar] && bars[t.exitBar].t) ts = bars[t.exitBar].t;
     allPnlPct.push(t.pnl / (equity - t.pnl) * 100);
     tradeLog.push({
-      id: i, ts: Math.min(ts, Date.now()), side: t.side, entryPrice: t.entryPrice, exitPrice: t.exitPrice,
+      id: i, ts: Math.min(ts, Date.now()), openTs: (useReal && bars[t.entryBar] && bars[t.entryBar].t) ? bars[t.entryBar].t : null, closeTs: (useReal && bars[t.exitBar] && bars[t.exitBar].t) ? bars[t.exitBar].t : null, side: t.side, entryPrice: t.entryPrice, exitPrice: t.exitPrice,
       pnl: t.pnl, pnlPct: t.pnlPct, result: t.result,
     });
   });
@@ -5202,7 +5233,7 @@ function runBacktest(strat) {
     calmar: Math.round(calmar * 100) / 100,
     var95: Math.round(var95 * 100) / 100,
     finalEquity: Math.round(equity * 100) / 100,
-    curve, tradeLog: tradeLog.slice(-40).reverse(), allPnlPct, generatedAt: Date.now(),
+    curve, tradeLog: tradeLog.slice().reverse(), allPnlPct, generatedAt: Date.now(),
     chartBars, chartTrades,
     dataSource: useReal ? realHit.source : 'simulated', dataFrom: useReal ? bars[0].t : null, dataTo: useReal ? bars[bars.length - 1].t : null, barCount: bars.length,
     dataNote: (!useReal && State.useRealData && realHit && realHit.unavailable) ? realHit.error : null,
@@ -5482,7 +5513,28 @@ function renderAllCharts() {
 }
 
 /* =================================== RENDER =================================== */
+/* ---------------- anonymous usage counts (read by the admin dashboard) ----------------
+   Sends only an event name for signed-in users. The server stores a salted hash of the user and daily
+   counts, never the username, IP or device. Skipped when the browser sends Do Not Track / GPC. */
+const Track = { last: '', visited: false };
+function trackSend(ev) {
+  try {
+    fetch('/api/track', { method: 'POST', keepalive: true, headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()), body: JSON.stringify({ event: ev }) }).catch(() => {});
+  } catch (e) {}
+}
+function track(ev) {
+  try {
+    if (!State.user || !State.user.username) return;
+    if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;
+    if (!Track.visited) { Track.visited = true; trackSend('visit'); }
+    if (ev) trackSend(String(ev).toLowerCase().replace(/[^a-z0-9_:-]/g, '_').slice(0, 40));
+  } catch (e) {}
+}
+function trackViewChange() {
+  try { if (State.user && State.view && State.view !== Track.last) { Track.last = State.view; track('view:' + State.view); } } catch (e) {}
+}
 function render() {
+  trackViewChange();
   const root = document.getElementById('app');
   const videoSnap = snapshotGuideVideos();
   // The strategy page re-renders on live polling, so keep the chat box focused
@@ -6462,7 +6514,7 @@ async function loadRealLiveStatus() {
         pushAlert('fill', 'info', `${name}'s real position closed.`);
       }
       if (d.last_error && (!prev || prev.last_error !== d.last_error)) {
-        pushAlert('error', 'warning', `${name}: ${d.last_error}`);
+        pushAlert('error', 'warning', `${name}: ${friendlyLiveError(d.last_error).title}. ${friendlyLiveError(d.last_error).fix}`);
       }
     });
     State.realLiveDeployments = newDeps;
@@ -6574,6 +6626,7 @@ async function undeployStrategy(strategyId) {
     }
     await loadRealLiveStatus();
   }
+  if (s.status === 'demo') { try { await fetch(`/api/sim/stop/${encodeURIComponent(strategyId)}`, { method: 'POST', headers: authHeaders() }); } catch (e) {} pfLoadSimTrades(true); }
   s.status = 'draft';
   delete State.liveSim[strategyId];
   await saveUser();
@@ -6605,6 +6658,18 @@ async function emergencyStopAll() {
   } catch (e) {
     toast('Could not reach the server for the emergency stop.', 'err');
   }
+}
+// A saved backtest keeps only its newest 150 trades. When a strategy is opened, quietly rebuild the full list from real history.
+async function restoreFullBacktestLog(id) {
+  const s = (State.user.strategies || []).find(x => x.id === id);
+  if (!s || !s.backtest || s.backtest.noData || (s.backtest.tradeLog || []).length >= s.backtest.trades) return;
+  try {
+    await loadRealBars(s.symbol, s.timeframe);
+    const old = s.backtest;
+    const bt = runBacktest(s);
+    // Only swap in the full log when the rebuilt run agrees with the saved one, so the numbers on screen never change.
+    if (!bt.noData && bt.trades === old.trades && (bt.tradeLog || []).length > (old.tradeLog || []).length) { old.tradeLog = bt.tradeLog; if (State.view === 'detail' && State.detailId === id) render(); }
+  } catch (e) {}
 }
 async function loadLiveTradeLog(strategyId) {
   State.liveTradeLog = null;
@@ -6728,8 +6793,8 @@ function exportTradeLogCsv(strategyName, trades, isReal) {
   if (!trades || !trades.length) { toast('No trades to export yet.', 'err'); return; }
   const rows = isReal
     ? trades.map(tr => [tr.opened_at, tr.side, tr.qty, tr.entry_price, tr.exit_price || '', tr.closed_at || '', tr.status])
-    : trades.map(tr => [tr.ts ? new Date(tr.ts).toLocaleString() : '', tr.side || '', tr.entryPrice, tr.exitPrice, tr.pnlPct !== undefined ? tr.pnlPct.toFixed(2) : '', tr.result || '']);
-  const headers = isReal ? ['Opened', 'Side', 'Qty', 'Entry', 'Exit', 'Closed', 'Status'] : ['Date', 'Side', 'Entry', 'Exit', 'PnL %', 'Result'];
+    : trades.map(tr => [tr.openTs ? new Date(tr.openTs).toISOString() : '', (tr.closeTs || tr.ts) ? new Date(tr.closeTs || tr.ts).toISOString() : '', tr.side || '', tr.entryPrice, tr.exitPrice, tr.pnlPct !== undefined ? tr.pnlPct.toFixed(2) : '', tr.result || '']);
+  const headers = isReal ? ['Opened (UTC)', 'Side', 'Qty', 'Entry', 'Exit', 'Closed (UTC)', 'Status'] : ['Opened (UTC)', 'Closed (UTC)', 'Side', 'Entry', 'Exit', 'PnL %', 'Result'];
   downloadCsv(`${strategyName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-trades.csv`, headers, rows);
   toast('Trade log exported.', 'ok');
 }
@@ -6817,12 +6882,37 @@ function v7LiveCard(s, dep) {
     return `<div class="lv-card watch">${head('watch', T3('WATCHING', 'مراقبة'))}
       <div class="lv-radar"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="30"/><circle cx="50" cy="50" r="14"/><path class="sweep" d="M50 50 L50 4 A46 46 0 0 1 90 27 Z"/></svg>
         <div><b>${T3('Scanning for an entry', 'يبحث عن نقطة دخول')}</b><span class="faint">${dep.last_checked_at ? T3('Last check ', 'آخر فحص ') + timeAgo(new Date(dep.last_checked_at).getTime()) : T3('First check coming up', 'الفحص الأول قريبًا')}</span></div></div>
+      ${dep.last_error ? `<div class="lv-foot" style="border-top:1px solid var(--border-soft);">${liveErrorBlock(dep.last_error, 'warn')}</div>` : ''}
       <div class="lv-foot"><span class="faint">${T3('Real order placed only when every rule is true', 'لا يُرسل أمر حقيقي إلا عند تحقق كل الشروط')}</span><button class="btn btn-ghost btn-sm" data-action="pause-live-strategy" data-id="${s.id}">${icon('x')} ${T3('Pause', 'إيقاف')}</button></div></div>`;
   }
   if (dep.status === 'paused') return `<div class="lv-card paused">${head('paused', T3('PAUSED', 'متوقفة'))}<div class="lv-foot"><span class="faint">${esc(dep.pause_reason || T3('Not watching for entries', 'لا يراقب الدخول'))}</span><button class="btn btn-outline btn-sm" data-action="resume-live-strategy" data-id="${s.id}">${icon('play')} ${T3('Resume', 'استئناف')}</button></div></div>`;
-  if (dep.status === 'error') return `<div class="lv-card err">${head('err', T3('ERROR', 'خطأ'))}<div class="lv-foot"><span style="color:var(--short);font-size:12px;">${esc(dep.last_error || 'Live monitoring hit an error')}</span></div></div>`;
+  if (dep.status === 'error') return `<div class="lv-card err">${head('err', T3('ERROR', 'خطأ'))}<div class="lv-foot">${liveErrorBlock(dep.last_error || 'Live monitoring hit an error')}</div></div>`;
   return '';
 }
+
+// Turns a raw broker or engine message into a plain-English reason and a next step.
+function friendlyLiveError(raw) {
+  const m = String(raw || '');
+  const R = (title, fix) => ({ title, fix });
+  if (/Could not read your broker account|retrying automatically/i.test(m)) return R(T3('Your broker did not answer just now', 'لم يستجب وسيطك الآن'), T3('The strategy is still watching and retries on its next check. Nothing for you to do unless it keeps happening.', 'الاستراتيجية ما زالت تراقب وتعيد المحاولة في الفحص التالي. لا يلزمك شيء ما لم يتكرر.'));
+  if (/buying power|insufficient (funds|qty)|not enough (cash|funds)/i.test(m)) return R(T3('Not enough buying power for this order', 'القوة الشرائية غير كافية لهذا الأمر'), T3('Lower the position size or free up cash at your broker, then redeploy.', 'قلل حجم الصفقة أو وفر سيولة لدى الوسيط ثم أعد النشر.'));
+  if (/short(ing| selling)?.*(not|cannot|can.t)|not (easy to borrow|shortable)|cannot be sold short|asset.*not.*shortable/i.test(m)) return R(T3('Short selling is not allowed here', 'البيع على المكشوف غير مسموح هنا'), T3('Your account or this symbol cannot be shorted. Switch the strategy to long, or enable margin and shorting with your broker.', 'حسابك أو هذا الرمز لا يسمح بالبيع على المكشوف. غيّر الاستراتيجية إلى شراء أو فعّل الهامش لدى الوسيط.'));
+  if (/not tradable|not tradeable|asset .*(not found|not active)|could not find asset|symbol.*(invalid|not found)/i.test(m)) return R(T3('Your broker cannot trade this symbol', 'وسيطك لا يستطيع تداول هذا الرمز'), T3('Pick a plain US stock or ETF ticker your broker supports, then redeploy.', 'اختر رمز سهم أو صندوق أمريكي يدعمه وسيطك ثم أعد النشر.'));
+  if (/pattern day|\bPDT\b/i.test(m)) return R(T3('Blocked by the pattern day trader rule', 'محظور بسبب قاعدة المتداول اليومي'), T3('Small margin accounts are limited in day trades. Use a longer timeframe, trade fewer times, or fund the account above the broker minimum.', 'الحسابات الصغيرة محدودة بالصفقات اليومية. استخدم إطارا أطول أو قلل الصفقات أو ارفع رصيد الحساب فوق حد الوسيط.'));
+  if (/market is closed|outside .*(hours|session)|extended hours|not open/i.test(m)) return R(T3('The market was closed when the order was sent', 'كان السوق مغلقا عند إرسال الأمر'), T3('Redeploy during market hours, or use a longer timeframe so signals fire in session.', 'أعد النشر خلال ساعات السوق أو استخدم إطارا أطول.'));
+  if (/unauthori[sz]ed|forbidden|invalid.*(key|credential)|\b40[13]\b|keys? (are|is) (invalid|revoked)/i.test(m)) return R(T3('Your broker rejected the connection keys', 'رفض وسيطك مفاتيح الاتصال'), T3('Reconnect the broker on the Brokers page with fresh keys, then redeploy.', 'أعد ربط الوسيط من صفحة الوسطاء بمفاتيح جديدة ثم أعد النشر.'));
+  if (/broker no longer connected|not connected/i.test(m)) return R(T3('The broker is no longer connected', 'الوسيط لم يعد متصلا'), T3('Reconnect it on the Brokers page, then redeploy.', 'أعد ربطه من صفحة الوسطاء ثم أعد النشر.'));
+  if (/does not support automated execution/i.test(m)) return R(T3('This broker cannot place automated orders yet', 'هذا الوسيط لا ينفذ أوامر آلية بعد'), T3('Only Alpaca places real automated orders today. Deploy to demo, or switch to Alpaca.', 'ألبكا فقط ينفذ أوامر آلية حقيقية حاليا. انشر تجريبيا أو انتقل إلى ألبكا.'));
+  if (/take.?profit|stop.?loss|bracket|limit_price|stop_price/i.test(m)) return R(T3('The stop or target price was not accepted', 'لم يُقبل سعر الوقف أو الهدف'), T3('Prices moved too fast, or the stop or target is too close to the market. Widen them a little in the strategy and redeploy.', 'تحرك السعر بسرعة أو أن الوقف أو الهدف قريب جدا من السوق. وسّعهما قليلا ثم أعد النشر.'));
+  if (/rate limit|too many requests|\b429\b/i.test(m)) return R(T3('Your broker is rate limiting requests', 'وسيطك يحد من عدد الطلبات'), T3('Wait a few minutes, then redeploy. Avoid running many strategies on one account at once.', 'انتظر دقائق ثم أعد النشر. تجنب تشغيل استراتيجيات كثيرة على حساب واحد.'));
+  if (/timeout|timed out|network|econn|fetch failed|\b50[0234]\b|temporar/i.test(m)) return R(T3('A temporary connection problem', 'مشكلة اتصال مؤقتة'), T3('Check your broker for any order before you redeploy, so an order is never sent twice.', 'تحقق من وسيطك من أي أمر قبل إعادة النشر حتى لا يُرسل الأمر مرتين.'));
+  return R(T3('The broker or engine reported a problem', 'أبلغ الوسيط أو المحرك عن مشكلة'), T3('Read the message below. Check your broker for any order, then redeploy once it is fixed.', 'اقرأ الرسالة أدناه وتحقق من وسيطك ثم أعد النشر بعد الإصلاح.'));
+}
+function liveErrorBlock(raw, tone) {
+  const f = friendlyLiveError(raw);
+  return `<div style="font-size:12.5px;line-height:1.5;"><b style="color:${tone === 'warn' ? 'var(--text)' : 'var(--short)'};">${esc(f.title)}</b><div class="muted" style="margin-top:2px;">${esc(f.fix)}</div>${raw ? `<div class="faint" style="font-size:11px;margin-top:4px;">${T3('Message: ', 'الرسالة: ')}${esc(String(raw).slice(0, 240))}</div>` : ''}</div>`;
+}
+
 function renderLivePositions() {
   const strategies = State.user.strategies || [];
   const liveAlpaca = strategies.filter(s => s.status === 'live' && s.brokerId === 'alpaca');
@@ -6886,14 +6976,58 @@ function statusBadge(status) {
 }
 
 /* ------------------------------- STRATEGIES LIST -------------------------------- */
+
+const USAGE_LABELS = { 'visit': 'Visit', 'signup': 'Signed up', 'strategy_created': 'Created a strategy', 'backtest_run': 'Ran a backtest', 'sim_deploy': 'Started demo trading', 'broker_connect': 'Connected a broker', 'live_deploy': 'Went live', 'copy_strategy': 'Copied a strategy', 'publish_strategy': 'Published a strategy' };
+function usageLabel(e) { if (USAGE_LABELS[e]) return USAGE_LABELS[e]; if (e.indexOf('view:') === 0) { const v = e.slice(5).replace(/[-_]/g, ' '); return 'Opened screen: ' + v; } return e; }
+function renderAdminUsage() {
+  const u = State.adminUsage, days = State.adminUsageDays || 30;
+  const sel = `<div style="display:flex;gap:6px;">${[7, 30, 90].map(d => `<button class="btn ${d === days ? 'btn-primary' : 'btn-ghost'} btn-sm" data-action="admin-usage-days" data-days="${d}">${d} days</button>`).join('')}</div>`;
+  if (u === null || u === undefined) return `<div class="panel panel-pad" style="margin-bottom:20px;"><div class="panel-head"><h3>${icon('chart')} Usage</h3>${sel}</div><p class="muted">Loading usage…</p></div>`;
+  if (u.error) return `<div class="panel panel-pad" style="margin-bottom:20px;"><div class="panel-head"><h3>${icon('chart')} Usage</h3>${sel}</div><p class="muted">${esc(u.error)}</p></div>`;
+  const t = u.totals || {}, a = u.active || {}, series = u.series || [];
+  const maxV = Math.max(1, ...series.map(x => Math.max(x.visitors, x.signups)));
+  const bars = series.map(x => `<div title="${x.day}: ${x.visitors} visitors, ${x.signups} signups" style="flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:1px;"><div style="height:${Math.round(x.visitors / maxV * 100)}%;background:var(--brand);border-radius:2px 2px 0 0;min-height:${x.visitors ? 2 : 0}px;"></div><div style="height:${Math.round(x.signups / maxV * 100)}%;background:var(--long);min-height:${x.signups ? 2 : 0}px;"></div></div>`).join('');
+  const f = u.funnel || [], top = Math.max(1, f[0] ? f[0].users : 1, ...f.map(x => x.users));
+  const funnel = f.map((x, i) => `<div style="margin:6px 0;"><div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>${i + 1}. ${esc(usageLabel(x.event))}</span><b class="mono">${x.users}</b></div><div style="height:6px;background:var(--bg-2,#222);border-radius:3px;"><div style="height:100%;width:${Math.round(x.users / top * 100)}%;background:var(--brand);border-radius:3px;"></div></div></div>`).join('');
+  const rows = (u.events || []).slice(0, 14).map(e => `<tr><td>${esc(usageLabel(e.event))}</td><td class="mono" style="text-align:right;">${e.count}</td><td class="mono" style="text-align:right;">${e.users}</td></tr>`).join('');
+  const lv = u.live || {};
+  const stat = (l, v, sub) => `<div class="panel stat-card"><div class="label">${l}</div><div class="value">${v === null || v === undefined ? 'n/a' : v}</div>${sub ? `<div class="faint" style="font-size:11.5px;">${sub}</div>` : ''}</div>`;
+  return `<div class="panel panel-pad" style="margin-bottom:20px;">
+    <div class="panel-head"><h3>${icon('chart')} Usage</h3>${sel}</div>
+    <div class="grid-4" style="margin-bottom:14px;">
+      ${stat('Total users', t.total, `${t.paid || 0} paid · ${t.trialing || 0} on free trial`)}
+      ${stat('Active last 24 hours', a.d1, `7 days: ${a.d7 || 0} · 30 days: ${a.d30 || 0}`)}
+      ${stat('New signups', t.new7, `last 24h: ${t.new1 || 0} · last 30 days: ${t.new30 || 0}`)}
+      ${stat('Strategies created', u.strategies, `${lv.live_active || 0} live and ${lv.sim_active || 0} demo running now`)}
+    </div>
+    <div style="font-size:12.5px;margin-bottom:6px;"><b>Daily visitors</b> <span class="faint">(signed-in users, last ${u.days} days)</span> <span style="margin-left:10px;"><i style="display:inline-block;width:9px;height:9px;background:var(--brand);border-radius:2px;"></i> visitors &nbsp;<i style="display:inline-block;width:9px;height:9px;background:var(--long);border-radius:2px;"></i> signups</span></div>
+    <div style="display:flex;align-items:flex-end;gap:2px;height:120px;margin-bottom:6px;">${bars}</div>
+    <div class="faint" style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:16px;"><span>${series[0] ? series[0].day : ''}</span><span>${series.length ? series[series.length - 1].day : ''}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;">
+      <div><div style="font-weight:600;font-size:13px;margin-bottom:4px;">Where users get to (distinct users)</div>${funnel}</div>
+      <div><div style="font-weight:600;font-size:13px;margin-bottom:4px;">Most used screens and features</div>${rows ? `<table style="width:100%;font-size:12.5px;border-collapse:collapse;"><thead><tr class="faint"><th style="text-align:left;font-weight:500;">What</th><th style="text-align:right;font-weight:500;">Times</th><th style="text-align:right;font-weight:500;">Users</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted" style="font-size:12.5px;">No activity recorded yet.</p>'}</div>
+    </div>
+    <div class="faint" style="font-size:11.5px;margin-top:14px;line-height:1.6;">Counts come from signed-in users only; visitors to the public landing page are not included (use a privacy-friendly web analytics tool for those). No usernames, IP addresses or devices are stored. Users are counted by a one-way hash, detail is deleted after 90 days, and people whose browser sends Do Not Track are not counted. Numbers are approximate. ${u.trackingSince ? 'Tracking started ' + esc(u.trackingSince) + '; earlier days show only signups and logins.' : 'Tracking has not recorded anything yet.'}</div>
+  </div>`;
+}
+async function loadAdminUsage() {
+  if (!(await backendAvailable())) { State.adminUsage = { error: 'Needs the real backend.' }; render(); return; }
+  try {
+    const res = await fetch('/api/admin/usage?days=' + (State.adminUsageDays || 30), { headers: authHeaders() });
+    const data = await res.json();
+    State.adminUsage = res.ok ? data : { error: data.error || 'Could not load usage.' };
+  } catch (e) { State.adminUsage = { error: 'Could not load usage.' }; }
+  render();
+}
 function renderAdmin() {
   if (State.adminCodes === null) {
-    return `${v5StripePanel()}<div class="panel panel-pad" style="text-align:center;padding:60px 24px;"><div class="spinner-sm" style="margin:0 auto 12px;"></div><p class="muted">Loading redemption codes…</p></div>`;
+    return `${renderAdminUsage()}${v5StripePanel()}<div class="panel panel-pad" style="text-align:center;padding:60px 24px;"><div class="spinner-sm" style="margin:0 auto 12px;"></div><p class="muted">Loading redemption codes…</p></div>`;
   }
   const codes = State.adminCodes;
   const now = Date.now();
   const totalRedemptions = codes.reduce((sum, c) => sum + c.uses.length, 0);
   return `
+  ${renderAdminUsage()}
   ${v5StripePanel()}
   <div class="grid-4" style="margin-bottom:20px;">
     <div class="panel stat-card">
@@ -6980,6 +7114,200 @@ function renderPortfolioAgentSection() {
   </div>`;
 }
 
+
+/* ---- Portfolio: every individual trade, not just one line per strategy ---- */
+async function pfLoadTrades() {
+  return v3Once('pf-trades', async () => {
+    if (!(await backendAvailable())) { if (V3.journal === null) V3.journal = { unavailable: true, trades: [] }; if (State.view === 'portfolio') render(); return; }
+    const r = await v3api('GET', '/api/live/journal?limit=1000');
+    if (r.ok) V3.journal = { trades: r.data.trades || [] }; else if (V3.journal === null) V3.journal = { unavailable: true, trades: [] };
+    if (State.view === 'portfolio') render();
+  });
+}
+function pfTradeRows() {
+  let t = (V3.journal && V3.journal.trades) || [];
+  if (V3.pfStrat) t = t.filter(x => x.strategyId === V3.pfStrat);
+  const f = V3.pfFilter || 'all';
+  if (f === 'open') t = t.filter(x => x.status === 'open'); else if (f === 'closed') t = t.filter(x => x.status === 'closed');
+  else if (f === 'wins') t = t.filter(x => x.pl !== null && x.pl > 0); else if (f === 'losses') t = t.filter(x => x.pl !== null && x.pl < 0);
+  return t;
+}
+function pfOpenPl(t) {
+  const pos = ((State.realPortfolio && State.realPortfolio.positions) || []).find(p => p.symbol === t.symbol);
+  if (!pos || !isFinite(pos.currentPrice) || !pos.currentPrice) return null;
+  return (t.side === 'buy' ? pos.currentPrice - t.entryPrice : t.entryPrice - pos.currentPrice) * t.qty;
+}
+function renderPortfolioTradesPanel() {
+  const all = (V3.journal && V3.journal.trades) || [];
+  if (V3.journal === null) { pfLoadTrades(); return `<div class="panel panel-pad" style="margin-bottom:16px;"><div class="panel-head"><h3>${icon('layers')} ${T3('Every trade', 'كل الصفقات')}</h3></div><p class="muted" style="font-size:13px;margin:0;">${T3('Loading your trades…', 'جار تحميل صفقاتك…')}</p></div>`; }
+  if (V3.journal.unavailable) return '';
+  const list = pfTradeRows(), shown = list.slice(0, V3.pfLimit || 100);
+  const closed = list.filter(x => x.pl !== null);
+  const net = closed.reduce((a, x) => a + x.pl, 0), w = closed.filter(x => x.pl > 0).length;
+  const chips = [['all', T3('All', 'الكل')], ['open', T3('Open', 'مفتوحة')], ['closed', T3('Closed', 'مغلقة')], ['wins', T3('Wins', 'رابحة')], ['losses', T3('Losses', 'خاسرة')]];
+  const strat = (State.user.strategies || []);
+  const names = new Map(all.map(x => [x.strategyId, x.strategyName]));
+  const dd = [...names.entries()].map(([id, n]) => `<option value="${esc(id)}" ${V3.pfStrat === id ? 'selected' : ''}>${esc(n || (strat.find(z => z.id === id) || {}).name || id)}</option>`).join('');
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">
+    <div class="panel-head"><h3>${icon('layers')} ${T3('Every trade', 'كل الصفقات')}</h3><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span class="badge badge-long">${T3('Real fills only', 'تنفيذ حقيقي فقط')}</span><span class="faint mono" style="font-size:11px;">${list.length} ${T3('trades', 'صفقة')}${closed.length ? ' · ' + w + ' ' + T3('wins', 'رابحة') + ' · ' + T3('net', 'الصافي') + ' ' + fmtSigned(net) : ''}</span><button class="btn btn-ghost btn-sm" data-action="pf-trades-csv">${T3('Export CSV', 'تصدير CSV')}</button></span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+      ${chips.map(([k, l]) => `<button class="asset-pill ${(V3.pfFilter || 'all') === k ? 'on' : ''}" data-action="pf-trade-filter" data-f="${k}">${l}</button>`).join('')}
+      <select class="input" data-field="pf-trade-strategy" style="min-width:170px;"><option value="">${T3('All strategies', 'كل الاستراتيجيات')}</option>${dd}</select>
+    </div>
+    ${!all.length ? `<p class="muted" style="font-size:13px;line-height:1.6;margin:0;">${T3('No real trades yet. Every order a strategy places will appear here as its own line.', 'لا صفقات حقيقية بعد. كل أمر تضعه الاستراتيجية سيظهر هنا في سطر مستقل.')}</p>` : !list.length ? `<p class="muted" style="font-size:13px;margin:0;">${T3('No trades match this filter.', 'لا صفقات تطابق هذا المرشح.')}</p>` : `
+    <div style="overflow:auto;max-height:560px;">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1040px;">
+      <thead><tr class="faint" style="font-size:10.5px;text-align:right;position:sticky;top:0;background:var(--panel);">
+        <th style="text-align:left;padding:6px 8px 8px 0;">${T3('OPENED', 'الفتح')}</th><th style="text-align:left;padding:6px 8px 8px;">${T3('CLOSED', 'الإغلاق')}</th><th style="text-align:left;padding:6px 8px 8px;">${T3('STRATEGY', 'الاستراتيجية')}</th><th style="text-align:left;padding:6px 8px 8px;">${T3('SYMBOL', 'الرمز')}</th><th style="padding:6px 8px 8px;">${T3('SIDE', 'الاتجاه')}</th><th style="padding:6px 8px 8px;">${T3('QTY', 'الكمية')}</th><th style="padding:6px 8px 8px;">${T3('ENTRY', 'الدخول')}</th><th style="padding:6px 8px 8px;">${T3('EXIT', 'الخروج')}</th><th style="padding:6px 8px 8px;">P&amp;L</th><th style="padding:6px 8px 8px;">%</th><th style="padding:6px 0 8px 8px;">${T3('STATUS', 'الحالة')}</th>
+      </tr></thead>
+      <tbody>
+      ${shown.map(t => {
+        const dec = priceDecimals(t.symbol), open = t.status === 'open';
+        const pl = open ? pfOpenPl(t) : t.pl;
+        const pct = pl !== null && pl !== undefined && t.entryPrice * t.qty ? (pl / (t.entryPrice * t.qty)) * 100 : null;
+        return `<tr style="border-top:1px solid var(--border-soft);text-align:right;">
+          <td class="mono faint" style="text-align:left;padding:9px 8px 9px 0;white-space:nowrap;">${fmtTs(t.openedAt)}</td>
+          <td class="mono faint" style="text-align:left;padding:9px 8px;white-space:nowrap;">${t.closedAt ? fmtTs(t.closedAt) : `<span class="faint">${T3('Still open', 'ما زالت مفتوحة')}</span>`}</td>
+          <td style="text-align:left;padding:9px 8px;"><b>${esc(t.strategyName || '')}</b></td>
+          <td class="mono" style="text-align:left;padding:9px 8px;">${esc(t.symbol)}</td>
+          <td style="padding:9px 8px;"><span class="badge ${t.side === 'sell' ? 'badge-short' : 'badge-long'}">${t.side === 'sell' ? 'SHORT' : 'LONG'}</span></td>
+          <td class="mono" style="padding:9px 8px;">${t.qty}</td>
+          <td class="mono" style="padding:9px 8px;">${Number(t.entryPrice).toFixed(dec)}</td>
+          <td class="mono" style="padding:9px 8px;">${t.exitPrice !== null && t.exitPrice !== undefined ? Number(t.exitPrice).toFixed(dec) : '<span class="faint">N/A</span>'}</td>
+          <td class="mono" style="padding:9px 8px;color:${plColor(pl || 0)}">${pl === null || pl === undefined ? '<span class="faint">N/A</span>' : fmtSigned(pl)}</td>
+          <td class="mono" style="padding:9px 8px;color:${plColor(pct || 0)}">${pct === null ? '<span class="faint">N/A</span>' : fmtPct(pct)}</td>
+          <td style="padding:9px 0 9px 8px;white-space:nowrap;">${open ? `<span class="badge badge-long"><span class="dot"></span>${T3('Open', 'مفتوحة')}</span> <button class="btn btn-ghost btn-sm" data-action="close-live-strategy" data-id="${esc(t.strategyId)}">${T3('Close', 'إغلاق')}</button>` : `<span class="badge badge-dim">${T3('Closed', 'مغلقة')}</span>`}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table></div>
+    ${list.length > shown.length ? `<div style="text-align:center;margin-top:12px;"><button class="btn btn-outline btn-sm" data-action="pf-trades-more">${T3('Show more', 'عرض المزيد')} (${list.length - shown.length})</button></div>` : ''}
+    <p class="faint" style="font-size:11.5px;margin:10px 0 0;line-height:1.5;">${T3('Times are shown in ', 'الأوقات بتوقيت ')}${esc(tzNote())}. ${T3('Open trades show their current profit or loss from your broker price. A strategy holds one open trade at a time. If two strategies hold the same symbol, your broker merges them into one position, but they are listed separately here.', 'تعرض الصفقات المفتوحة ربحها أو خسارتها الحالية من سعر الوسيط. تحتفظ الاستراتيجية بصفقة مفتوحة واحدة في كل مرة. إذا امتلكت استراتيجيتان الرمز نفسه يدمجهما الوسيط في مركز واحد لكنهما مدرجتان هنا منفصلتين.')}</p>`}
+  </div>`;
+}
+function pfTradesCsv() {
+  const rows = pfTradeRows();
+  const q = v => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['Opened', 'Closed', 'Strategy', 'Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'PnL', 'PnL %', 'Status'];
+  const lines = [head.join(',')].concat(rows.map(t => [t.openedAt, t.closedAt, t.strategyName, t.symbol, t.side === 'sell' ? 'short' : 'long', t.qty, t.entryPrice, t.exitPrice, t.pl === null ? '' : Number(t.pl).toFixed(2), t.plPct === null || t.plPct === undefined ? '' : Number(t.plPct).toFixed(2), t.status].map(q).join(',')));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'vatictrader-trades.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+
+/* ---- Portfolio: trade analytics from real closed fills ---- */
+function pfAnalytics(trades) {
+  const cl = trades.filter(t => t.pl !== null && t.pl !== undefined && t.closedAt).sort((a, b) => new Date(a.closedAt) - new Date(b.closedAt));
+  const n = cl.length; if (!n) return null;
+  const wins = cl.filter(t => t.pl > 0), losses = cl.filter(t => t.pl < 0);
+  const gw = wins.reduce((a, t) => a + t.pl, 0), gl = -losses.reduce((a, t) => a + t.pl, 0);
+  let cum = 0, peak = 0, maxDD = 0, curve = [0], run = 0, maxLoseRun = 0, hold = 0, holdN = 0;
+  cl.forEach(t => {
+    cum += t.pl; curve.push(Math.round(cum * 100) / 100); peak = Math.max(peak, cum); maxDD = Math.max(maxDD, peak - cum);
+    if (t.pl < 0) { run++; maxLoseRun = Math.max(maxLoseRun, run); } else if (t.pl > 0) run = 0;
+    const h = new Date(t.closedAt) - new Date(t.openedAt); if (isFinite(h) && h >= 0) { hold += h; holdN++; }
+  });
+  let streak = 0, streakType = null;
+  for (let i = cl.length - 1; i >= 0; i--) { const k = cl[i].pl > 0 ? 'W' : cl[i].pl < 0 ? 'L' : null; if (!k) break; if (streakType === null) streakType = k; if (k !== streakType) break; streak++; }
+  const group = (keyFn) => { const m = new Map(); cl.forEach(t => { const k = keyFn(t); const g = m.get(k) || { key: k, n: 0, w: 0, pl: 0 }; g.n++; if (t.pl > 0) g.w++; g.pl += t.pl; m.set(k, g); }); return [...m.values()]; };
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return {
+    n, winRate: wins.length / n * 100, net: cum, profitFactor: gl > 0 ? gw / gl : (gw > 0 ? Infinity : null),
+    expectancy: cum / n, avgWin: wins.length ? gw / wins.length : null, avgLoss: losses.length ? -gl / losses.length : null,
+    payoff: wins.length && losses.length ? (gw / wins.length) / (gl / losses.length) : null,
+    best: Math.max(...cl.map(t => t.pl)), worst: Math.min(...cl.map(t => t.pl)), maxDD, maxLoseRun, streak, streakType,
+    avgHoldMin: holdN ? hold / holdN / 60000 : null, curve,
+    byStrategy: group(t => t.strategyName || t.strategyId).sort((a, b) => b.pl - a.pl),
+    bySymbol: group(t => t.symbol).sort((a, b) => b.pl - a.pl),
+    byDay: group(t => days[new Date(t.closedAt).getDay()]).sort((a, b) => days.indexOf(a.key) - days.indexOf(b.key)),
+  };
+}
+function pfFmtDur(min) { if (min === null || !isFinite(min)) return 'N/A'; if (min < 90) return Math.round(min) + ' min'; if (min < 2880) return (min / 60).toFixed(1) + ' h'; return (min / 1440).toFixed(1) + ' d'; }
+function renderPortfolioAnalyticsPanel() {
+  if (!V3.journal || V3.journal.unavailable || !(V3.journal.trades || []).length) return '';
+  const base = V3.pfStrat ? V3.journal.trades.filter(x => x.strategyId === V3.pfStrat) : V3.journal.trades;
+  const a = pfAnalytics(base);
+  const head = `<div class="panel-head"><h3>${icon('chartBars')} ${T3('Trade analytics', 'تحليل الصفقات')}</h3><span class="badge badge-long">${T3('Closed real fills', 'صفقات حقيقية مغلقة')}</span></div>`;
+  if (!a) return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}<p class="muted" style="font-size:13px;margin:0;">${T3('Analytics appear once at least one real trade has closed.', 'تظهر التحليلات بعد إغلاق صفقة حقيقية واحدة على الأقل.')}</p></div>`;
+  const stat = (label, val, sub, color) => `<div class="panel stat-card"><div class="label">${label}</div><div class="value" style="${color ? 'color:' + color : ''}">${val}</div><div class="delta muted">${sub || ''}</div></div>`;
+  const pf = a.profitFactor === null ? 'N/A' : a.profitFactor === Infinity ? 'No losses' : a.profitFactor.toFixed(2);
+  const tbl = (title, rows) => `<div><div class="faint" style="font-size:10.5px;letter-spacing:.06em;margin-bottom:6px;">${title}</div>${rows.slice(0, 8).map(r => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:5px 0;border-top:1px solid var(--border-soft);"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(String(r.key))}</span><span class="mono" style="white-space:nowrap;"><span class="faint">${r.n} · ${Math.round(r.w / r.n * 100)}%</span> <b style="color:${plColor(r.pl)}">${fmtSigned(r.pl)}</b></span></div>`).join('')}</div>`;
+  const warn = a.n < 30 ? `<p style="font-size:12.5px;color:var(--text-dim);margin:0 0 12px;">${T3(`Only ${a.n} closed trade${a.n === 1 ? '' : 's'}. Averages from so few trades are mostly luck, 30 or more is a fairer sample.`, `${a.n} صفقة مغلقة فقط. المتوسطات من عدد قليل كهذا تعتمد على الحظ، والأفضل 30 صفقة أو أكثر.`)}</p>` : '';
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${warn}
+    <div class="grid-4" style="margin-bottom:12px;">
+      ${stat(T3('Net P&L', 'صافي الربح'), fmtSigned(a.net), a.n + ' ' + T3('closed trades', 'صفقة مغلقة'), plColor(a.net))}
+      ${stat(T3('Win rate', 'نسبة الربح'), a.winRate.toFixed(0) + '%', T3('Payoff ratio ', 'نسبة العائد ') + (a.payoff === null ? 'N/A' : a.payoff.toFixed(2)))}
+      ${stat(T3('Profit factor', 'معامل الربح'), pf, T3('gross wins / gross losses', 'إجمالي الربح / إجمالي الخسارة'))}
+      ${stat(T3('Expectancy', 'التوقع'), fmtSigned(a.expectancy), T3('average per trade', 'متوسط لكل صفقة'), plColor(a.expectancy))}
+    </div>
+    <div class="grid-4" style="margin-bottom:14px;">
+      ${stat(T3('Average win', 'متوسط الربح'), a.avgWin === null ? 'N/A' : fmtSigned(a.avgWin), T3('best ', 'الأفضل ') + fmtSigned(a.best), 'var(--long)')}
+      ${stat(T3('Average loss', 'متوسط الخسارة'), a.avgLoss === null ? 'N/A' : fmtSigned(a.avgLoss), T3('worst ', 'الأسوأ ') + fmtSigned(a.worst), 'var(--short)')}
+      ${stat(T3('Max drawdown', 'أقصى تراجع'), '-' + fmtMoney(a.maxDD), T3('peak to trough, realized', 'من القمة للقاع، محقق'))}
+      ${stat(T3('Streaks', 'التتابع'), a.streakType ? a.streak + a.streakType : 'N/A', T3('longest losing run ', 'أطول خسارة متتالية ') + a.maxLoseRun + ' · ' + T3('avg hold ', 'متوسط المدة ') + pfFmtDur(a.avgHoldMin))}
+    </div>
+    ${a.curve.length > 2 ? `<div class="faint" style="font-size:10.5px;letter-spacing:.06em;margin-bottom:6px;">${T3('CUMULATIVE REALIZED P&L, TRADE BY TRADE', 'الربح المحقق التراكمي، صفقة بصفقة')}</div><div class="chart-wrap" style="height:150px;margin-bottom:14px;"><canvas data-chart data-grid="1" data-dot="1" data-points='${esc(JSON.stringify(a.curve))}' style="width:100%;height:100%;"></canvas></div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;">
+      ${tbl(T3('BY STRATEGY (trades · win rate · P&L)', 'حسب الاستراتيجية'), a.byStrategy)}
+      ${tbl(T3('BY SYMBOL', 'حسب الرمز'), a.bySymbol)}
+      ${tbl(T3('BY WEEKDAY CLOSED', 'حسب يوم الإغلاق'), a.byDay)}
+    </div>
+    <p class="faint" style="font-size:11.5px;margin:12px 0 0;line-height:1.5;">${T3('Computed only from your real closed trades. Past results do not predict future ones, and fees you pay your broker are not included.', 'تُحسب فقط من صفقاتك الحقيقية المغلقة. النتائج السابقة لا تتنبأ بالمستقبل ولا تشمل الرسوم لدى وسيطك.')}</p>
+  </div>`;
+}
+
+
+/* ---- Simulated forward-testing trades (demo strategies on live prices, no orders sent) ---- */
+async function pfLoadSimTrades(force) {
+  if (!force && V3.simTrades) return;
+  return v3Once('sim-trades', async () => {
+    if (!(await backendAvailable())) { V3.simTrades = V3.simTrades || { unavailable: true, trades: [] }; return; }
+    const r = await v3api('GET', '/api/sim/trades?limit=1000');
+    V3.simTrades = r.ok ? { trades: r.data.trades || [] } : (V3.simTrades || { unavailable: true, trades: [] });
+    if (State.view === 'portfolio' || State.view === 'detail') render();
+  });
+}
+function simTradesTable(list, withStrategy) {
+  const shown = list.slice(0, V3.simLimit || 50);
+  return `<div style="overflow:auto;max-height:480px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:${withStrategy ? 960 : 840}px;">
+    <thead><tr class="faint" style="font-size:10.5px;text-align:right;position:sticky;top:0;background:var(--panel);"><th style="text-align:left;padding:6px 8px 8px 0;">${T3('OPENED', 'الفتح')}</th><th style="text-align:left;padding:6px 8px 8px;">${T3('CLOSED', 'الإغلاق')}</th>${withStrategy ? `<th style="text-align:left;padding:6px 8px 8px;">${T3('STRATEGY', 'الاستراتيجية')}</th>` : ''}<th style="text-align:left;padding:6px 8px 8px;">${T3('SYMBOL', 'الرمز')}</th><th style="padding:6px 8px 8px;">${T3('SIDE', 'الاتجاه')}</th><th style="padding:6px 8px 8px;">${T3('ENTRY', 'الدخول')}</th><th style="padding:6px 8px 8px;">${T3('EXIT', 'الخروج')}</th><th style="padding:6px 8px 8px;">P&amp;L</th><th style="padding:6px 8px 8px;">%</th><th style="padding:6px 0 8px 8px;">${T3('RESULT', 'النتيجة')}</th></tr></thead>
+    <tbody>${shown.map(t => { const dec = priceDecimals(t.symbol), open = t.status === 'open';
+      const why = { take_profit: T3('Take profit', 'جني الربح'), stop_loss: T3('Stop loss', 'وقف الخسارة'), trailing_stop: T3('Trailing stop', 'وقف متحرك'), stopped: T3('Strategy stopped', 'أوقفت'), redeployed: T3('Redeployed', 'أعيد نشرها') }[t.closeReason] || T3('Closed', 'مغلقة');
+      return `<tr style="border-top:1px solid var(--border-soft);text-align:right;">
+      <td class="mono faint" style="text-align:left;padding:9px 8px 9px 0;white-space:nowrap;">${fmtTs(t.openedAt)}</td>
+      <td class="mono faint" style="text-align:left;padding:9px 8px;white-space:nowrap;">${t.closedAt ? fmtTs(t.closedAt) : `<span class="faint">${T3('Still open', 'ما زالت مفتوحة')}</span>`}</td>
+      ${withStrategy ? `<td style="text-align:left;padding:9px 8px;"><b>${esc(t.strategyName || '')}</b></td>` : ''}
+      <td class="mono" style="text-align:left;padding:9px 8px;">${esc(t.symbol)}</td>
+      <td style="padding:9px 8px;"><span class="badge ${t.side === 'sell' ? 'badge-short' : 'badge-long'}">${t.side === 'sell' ? 'SHORT' : 'LONG'}</span></td>
+      <td class="mono" style="padding:9px 8px;">${Number(t.entryPrice).toFixed(dec)}</td>
+      <td class="mono" style="padding:9px 8px;">${t.exitPrice !== null && t.exitPrice !== undefined ? Number(t.exitPrice).toFixed(dec) : '<span class="faint">N/A</span>'}</td>
+      <td class="mono" style="padding:9px 8px;color:${plColor(t.pl || 0)}">${t.pl === null || t.pl === undefined ? '<span class="faint">N/A</span>' : fmtSigned(t.pl)}</td>
+      <td class="mono" style="padding:9px 8px;color:${plColor(t.plPct || 0)}">${t.plPct === null || t.plPct === undefined ? '<span class="faint">N/A</span>' : fmtPct(t.plPct)}</td>
+      <td style="padding:9px 0 9px 8px;">${open ? `<span class="badge badge-info"><span class="dot"></span>${T3('Open', 'مفتوحة')}</span>` : `<span class="badge badge-dim">${why}</span>`}</td></tr>`; }).join('')}</tbody></table></div>
+    ${list.length > shown.length ? `<div style="text-align:center;margin-top:12px;"><button class="btn btn-outline btn-sm" data-action="sim-trades-more">${T3('Show more', 'عرض المزيد')} (${list.length - shown.length})</button></div>` : ''}`;
+}
+function renderSimTradesPanel() {
+  const st = V3.simTrades;
+  const demoN = (State.user.strategies || []).filter(x => x.status === 'demo').length;
+  if (!st) { pfLoadSimTrades(); return ''; }
+  if (st.unavailable || (!st.trades.length && !demoN)) return '';
+  const head = `<div class="panel-head"><h3>${icon('play')} ${T3('Simulated forward-testing', 'اختبار أمامي محاكى')}</h3><span class="badge badge-info">${T3('Practice, no real money', 'تدريب، بلا أموال حقيقية')}</span></div>`;
+  const a = pfAnalytics(st.trades);
+  const sum = a ? `<p style="font-size:13px;margin:0 0 12px;"><b>${st.trades.length}</b> ${T3('simulated trades', 'صفقة محاكاة')} · <b>${a.winRate.toFixed(0)}%</b> ${T3('win rate', 'نسبة ربح')} · ${T3('net', 'الصافي')} <b style="color:${plColor(a.net)}">${fmtSigned(a.net)}</b> ${T3('on a virtual $10,000', 'على 10,000$ افتراضية')} · ${T3('profit factor', 'معامل الربح')} <b>${a.profitFactor === null ? 'N/A' : a.profitFactor === Infinity ? 'no losses' : a.profitFactor.toFixed(2)}</b>${a.n < 30 ? ` <span class="faint">(${T3('too few closed trades to judge', 'عدد قليل لا يكفي للحكم')})</span>` : ''}</p>` : '';
+  const note = `<p class="faint" style="font-size:11.5px;margin:10px 0 0;line-height:1.5;">${T3('Demo strategies are checked about once a minute on live prices (your Alpaca data for US tickers when connected, otherwise Yahoo Finance, which can be delayed). Entries use the last bar close, exits use later bars, a stop wins if a bar touches both levels, and a 0.1% round-trip cost is charged. No order is ever sent to a broker, and real fills can differ. Only this page records these trades, they never touch your real totals.', 'تُفحص الاستراتيجيات التجريبية مرة كل دقيقة تقريبا على أسعار حية. يستخدم الدخول إغلاق آخر شمعة والخروج الشموع اللاحقة، ويفوز الوقف إذا لمست الشمعة المستويين، وتُحتسب تكلفة 0.1% للصفقة. لا يُرسل أي أمر لأي وسيط وقد تختلف التنفيذات الحقيقية. لا تدخل هذه الصفقات في إجمالياتك الحقيقية.')}</p>`;
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${sum}${st.trades.length ? simTradesTable(st.trades, true) : `<p class="muted" style="font-size:13px;margin:0;">${T3('Waiting for a first signal. Each demo strategy is watching live prices, and every simulated entry and exit will appear here.', 'بانتظار أول إشارة. كل استراتيجية تجريبية تراقب الأسعار وستظهر هنا كل عمليات الدخول والخروج المحاكاة.')}</p>`}${note}</div>`;
+}
+function renderSimTradeLogSection(s) {
+  if (s.status !== 'demo') return '';
+  const st = V3.simTrades;
+  if (!st) { pfLoadSimTrades(); return ''; }
+  const mine = (st.trades || []).filter(t => t.strategyId === s.id);
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">
+    <div class="panel-head"><h3>${icon('play')} ${T3('Simulated trades', 'الصفقات المحاكاة')} <span class="badge badge-info" style="margin-left:6px;">${T3('Practice, no real money', 'تدريب')}</span></h3>${mine.length ? `<span class="faint" style="font-size:11.5px;">${mine.length} ${T3('trades', 'صفقة')}</span>` : ''}</div>
+    ${mine.length ? simTradesTable(mine, false) : `<p class="muted" style="font-size:13px;margin:0;">${st.unavailable ? T3('Simulated trades need the VaticTrader backend.', 'تحتاج الصفقات المحاكاة إلى الخادم.') : T3('Watching live prices. The first simulated entry will appear here.', 'تراقب الأسعار الحية. سيظهر هنا أول دخول محاكى.')}</p>`}
+  </div>`;
+}
+
 function renderRealPortfolioSections(strategies, extra) {
   const c = realCapitalSummary();
   let html = renderRealCapitalPanel() + (extra || '') + renderRiskPanel();
@@ -7035,6 +7363,8 @@ function renderRealPortfolioSections(strategies, extra) {
       </table></div>
     </div>`;
   }
+
+  html += renderPortfolioAnalyticsPanel() + renderPortfolioTradesPanel() + renderSimTradesPanel();
 
   // Positions held at the broker
   if (rp.positions && rp.positions.length) {
@@ -7656,10 +7986,10 @@ function renderFeed() {
   const activeTraders = new Set(all.map(e => e.ownerUsername || e.ownerName).filter(Boolean)).size;
 
   const tabs = [
-    ['following', 'compass', 'Following'],
-    ['trending', 'fire', 'Trending'],
-    ['toprated', 'star', 'Top Rated'],
-    ['activity', 'bolt', 'Your Activity'],
+    ['following', 'compass', 'New from people I follow'],
+    ['trending', 'fire', 'Most copied'],
+    ['toprated', 'star', 'Top rated'],
+    ['activity', 'bolt', 'My activity'],
   ];
 
   let body = '';
@@ -7714,7 +8044,7 @@ function renderFeed() {
           ${personalized ? `<div class="fw-orb ${State.followOnly ? '' : 'on'}" data-action="follow-filter" data-username=""><span class="fw-ring fw-ring-all">${icon('feed')}</span><b>${T3('Everyone', 'الجميع')}</b><em>${followed.length}</em></div>` : ''}
           ${followed.map(m => orbit(m, State.followOnly === m.uname)).join('')}
         </div>
-        <div class="fw-orbit-key faint">${T3('A glowing ring means that trader published in the last 48 hours. The number is how many strategies they have shared.', 'الحلقة المضيئة تعني أن المتداول نشر خلال آخر 48 ساعة. الرقم هو عدد استراتيجياته المنشورة.')}</div>
+        <div class="fw-orbit-key faint">${personalized ? T3('Strategies from traders you follow, newest first. Tap a face to see only that trader.', 'استراتيجيات من تتابعهم، الأحدث أولا. اضغط على وجه لعرض متداول واحد فقط.') : T3('You do not follow anyone yet. Tap Follow on a suggested trader to start.', 'لا تتابع أحدا بعد. اضغط متابعة على متداول مقترح للبدء.')}</div>
       </div>
       <div class="fw-layout">
         <div class="fw-main">
@@ -7732,13 +8062,6 @@ function renderFeed() {
             : `<div class="panel"><div class="empty-state" style="padding:50px 20px;">${icon('feed')}<p>${T3('No published strategies match. Traders you follow have not posted anything new, or your filter is too narrow.', 'لا توجد استراتيجيات مطابقة.')}</p></div></div>`}
         </div>
         <aside class="fw-side">
-          ${star ? `<div class="panel fw-spot"><div class="fw-spot-tag">${icon('star')} ${T3('Star of your circle', 'نجم دائرتك')}</div>
-            <div class="fw-spot-who" data-action="view-profile" data-username="${esc(star.m.uname)}">${renderAvatarBit(star.m.photo, star.m.color, initialsOf(star.m.name), 46)}<div class="fw-meta"><b>${esc(star.m.name)}</b><span>${T3('average backtest return', 'متوسط عائد الاختبار')}</span></div></div>
-            <div class="fw-spot-big mono" style="color:${star.a >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtPct(star.a)}</div>
-            ${bestPost ? `<div class="faint" style="font-size:11.5px;">${T3('Best single strategy', 'أفضل استراتيجية')}: ${esc(bestPost.name)} (${fmtPct(bestPost.totalReturn)})</div>` : ''}</div>` : ''}
-          ${lb.length ? `<div class="panel panel-pad" style="margin-top:14px;"><div class="panel-head"><h3>${T3('Your circle, ranked', 'دائرتك مرتبة')}</h3></div>
-            ${lb.map((x, i) => `<div class="fw-lb" data-action="follow-filter" data-username="${esc(x.m.uname)}"><span class="fw-lb-n">${i + 1}</span>${renderAvatarBit(x.m.photo, x.m.color, initialsOf(x.m.name), 26)}<div class="fw-lb-b"><b>${esc(x.m.name)}</b><div class="fw-lb-track"><i style="width:${Math.max(6, Math.abs(x.a) / lbMax * 100).toFixed(0)}%;background:${x.a >= 0 ? 'var(--long)' : 'var(--short)'}"></i></div></div><span class="mono fw-lb-v" style="color:${x.a >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtPct(x.a)}</span></div>`).join('')}
-            <div class="faint" style="font-size:11px;margin-top:8px;">${T3('Average return of each trader\'s published strategies, from real-data backtests.', 'متوسط عائد استراتيجيات كل متداول من اختبارات ببيانات حقيقية.')}</div></div>` : ''}
           ${suggestions.length ? `<div class="panel panel-pad" style="margin-top:14px;"><div class="panel-head"><h3>${T3('Discover traders', 'اكتشف متداولين')}</h3></div>${suggestions.slice(0, 4).map(sugCard).join('')}</div>` : ''}
         </aside>
       </div>`;
@@ -7761,12 +8084,6 @@ function renderFeed() {
   }
 
   return `
-  <div class="feed-stats-strip">
-    <div><b>${all.length}</b><span>Published strategies</span></div>
-    <div><b>${postedToday}</b><span>Posted today</span></div>
-    <div><b>${activeTraders}</b><span>Active traders</span></div>
-    <div><b>${followingUsernames.length}</b><span>You follow</span></div>
-  </div>
   <div class="auth-tabs feed-tabs">
     ${tabs.map(([id, ic, label]) => `<div class="auth-tab ${tab === id ? 'active' : ''}" data-action="feed-tab" data-tab="${id}">${icon(ic)} ${label}</div>`).join('')}
   </div>
@@ -7804,7 +8121,7 @@ function renderPostCard(e, opts) {
       <button class="post-action-btn ${liked ? 'on' : ''}" data-action="toggle-like" data-id="${e.id}">${icon(liked ? 'heartFill' : 'heart')} <span>${(e.likes || []).length}</span></button>
       <span class="post-action-btn" style="cursor:default;">${icon('comment')} <span>${(e.comments || []).length}</span></span>
       <span style="flex:1;"></span>
-      ${e.ownerUsername === State.user.username ? `<span class="badge badge-brand">Yours</span>` : `<button class="btn btn-outline btn-sm" data-action="copy-community" data-id="${e.id}">${icon('copy')} Copy</button>`}
+      ${e.ownerUsername === State.user.username ? `<span class="badge badge-brand">Yours</span>` : `<button class="btn btn-outline btn-sm" data-action="copy-community" data-id="${e.id}">${icon('copy')} Copy strategy</button>`}
     </div>
     <div class="post-comments">
       ${(e.comments || []).slice(-4).map(c => `
@@ -7880,6 +8197,63 @@ function renderTemplateResults() {
     <div class="strategy-grid">${list.slice(0, n).map(({ t, i }) => renderTemplateCard(t, i)).join('')}</div>
     ${list.length > n ? `<div style="text-align:center;margin:18px 0;"><button class="btn btn-outline" data-action="tpl-more">${T3('Show more', 'عرض المزيد')} (${list.length - n})</button></div>` : ''}`;
 }
+
+/* ---- Strategy screener: backtest the filtered library on real history and rank it ---- */
+async function tplScreenRun() {
+  if (State.screen && State.screen.running) return;
+  const list = tplFiltered().slice(0, 24);
+  if (!list.length) { toast('No strategies match the current filters.', 'info'); return; }
+  State.screen = { running: true, done: 0, total: list.length, rows: [], skipped: 0, started: Date.now() };
+  render();
+  const pairs = [...new Set(list.map(({ t }) => t.symbol + '|' + t.timeframe))];
+  for (let i = 0; i < pairs.length; i += 3) {
+    await Promise.all(pairs.slice(i, i + 3).map(k => { const [sym, tf] = k.split('|'); return loadRealBars(sym, tf); }));
+  }
+  const costs = backtestCosts(), rt = 2 * (costs.feePct + costs.slipPct);
+  const rows = [];
+  list.forEach(({ t, i }) => {
+    const strat = Object.assign(blankDraft(), JSON.parse(JSON.stringify({ name: t.name, symbol: t.symbol, timeframe: t.timeframe, direction: t.direction, entryConditions: t.entryConditions, takeProfit: t.takeProfit, stopLoss: t.stopLoss, positionSizePct: t.positionSizePct, trailingStop: !!t.trailingStop, trailingStopPct: t.trailingStopPct || 0 })));
+    strat.entryConditions = strat.entryConditions.map(c => Object.assign({ id: uid() }, c));
+    let bt = null; try { bt = runBacktest(strat); } catch (e) { bt = null; }
+    const be = (t.stopLoss + rt) / ((t.takeProfit || 0) + t.stopLoss) * 100;
+    if (!bt || bt.noData) { rows.push({ i, t, verdict: 'No data', rank: 9 }); return; }
+    const out = bt.oos && bt.oos.outSample ? bt.oos.outSample : null;
+    const edge = bt.winRate - be;
+    let verdict = 'Weak', rank = 3;
+    if (bt.trades < 30) { verdict = 'Too few trades'; rank = 5; }
+    else if (out && out.trades >= 5 && out.returnPct < 0) { verdict = 'Fails recent 30%'; rank = 4; }
+    else if (bt.totalReturn > 0 && edge >= 3) { verdict = 'Passes'; rank = 1; }
+    else if (bt.totalReturn > 0) { verdict = 'Marginal'; rank = 2; }
+    rows.push({ i, t, trades: bt.trades, winRate: bt.winRate, be, edge, ret: bt.totalReturn, oosRet: out && out.trades >= 5 ? out.returnPct : null, dd: bt.maxDrawdown, verdict, rank });
+  });
+  rows.sort((a, b) => a.rank - b.rank || (b.edge || -99) - (a.edge || -99));
+  State.screen = { running: false, done: list.length, total: list.length, rows, costs: rt, finished: Date.now() };
+  render();
+}
+function renderTplScreenPanel() {
+  const sc = State.screen, n = tplFiltered().length;
+  const head = `<div class="panel-head"><h3>${icon('compass')} ${T3('Strategy screener', 'فاحص الاستراتيجيات')}</h3><button class="btn btn-primary btn-sm" data-action="tpl-screen-run" ${sc && sc.running ? 'disabled' : ''}>${sc && sc.running ? T3('Screening…', 'جار الفحص…') : T3('Screen these on real data', 'افحصها على بيانات حقيقية')}</button></div>`;
+  const intro = `<p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 ${sc && !sc.running ? 12 : 0}px;">${T3(`Backtests up to 24 of the ${n} strategies shown (use the filters above to choose) on real price history, then ranks them. A strategy passes only with 30 or more trades, a positive return, a win rate at least 3 points above its break-even rate after costs, and no loss on the most recent 30% of history. This filters out weak ideas, it does not prove any strategy will make money.`, `يختبر حتى 24 من الاستراتيجيات المعروضة على بيانات سعرية حقيقية ثم يرتبها. لا تنجح الاستراتيجية إلا بـ 30 صفقة فصاعدا وعائد موجب ونسبة ربح تزيد 3 نقاط على نقطة التعادل بعد التكاليف دون خسارة في آخر 30% من البيانات. هذا يستبعد الأفكار الضعيفة ولا يثبت أن أي استراتيجية ستربح.`)}</p>`;
+  if (!sc) return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${intro}</div>`;
+  if (sc.running) return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${intro}<p class="muted" style="font-size:13px;margin:10px 0 0;">${T3('Loading real market history and running backtests…', 'جار تحميل البيانات وتشغيل الاختبارات…')}</p></div>`;
+  const vcls = { Passes: 'badge-long', Marginal: 'badge-info', Weak: 'badge-dim', 'Too few trades': 'badge-dim', 'Fails recent 30%': 'badge-short', 'No data': 'badge-dim' };
+  const pass = sc.rows.filter(r => r.verdict === 'Passes').length, nod = sc.rows.filter(r => r.verdict === 'No data').length;
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${intro}
+    <p style="font-size:13px;margin:0 0 10px;"><b>${pass}</b> ${T3('of', 'من')} ${sc.rows.length} ${T3('passed', 'نجحت')}${nod ? ` · ${nod} ${T3('had no real price history', 'بلا بيانات حقيقية')}` : ''} · ${T3('costs assumed', 'التكاليف')} ${sc.costs.toFixed(2)}% ${T3('per round trip', 'للصفقة')}</p>
+    <div style="overflow:auto;max-height:520px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px;">
+      <thead><tr class="faint" style="font-size:10.5px;text-align:right;position:sticky;top:0;background:var(--panel);"><th style="text-align:left;padding:6px 8px 8px 0;">${T3('STRATEGY', 'الاستراتيجية')}</th><th style="padding:6px 8px 8px;">${T3('TRADES', 'الصفقات')}</th><th style="padding:6px 8px 8px;">${T3('WIN RATE', 'نسبة الربح')}</th><th style="padding:6px 8px 8px;">${T3('BREAK-EVEN', 'التعادل')}</th><th style="padding:6px 8px 8px;">${T3('EDGE', 'الفارق')}</th><th style="padding:6px 8px 8px;">${T3('RETURN', 'العائد')}</th><th style="padding:6px 8px 8px;">${T3('RECENT 30%', 'آخر 30%')}</th><th style="padding:6px 8px 8px;">${T3('RESULT', 'النتيجة')}</th><th style="padding:6px 0 8px 8px;"></th></tr></thead>
+      <tbody>${sc.rows.map(r => `<tr style="border-top:1px solid var(--border-soft);text-align:right;">
+        <td style="text-align:left;padding:9px 8px 9px 0;"><b>${esc(r.t.name)}</b><div class="faint" style="font-size:11px;">${esc(r.t.symbol)} · ${esc(r.t.timeframe)} · +${r.t.takeProfit}% / -${r.t.stopLoss}%</div></td>
+        ${r.trades === undefined ? `<td colspan="6" class="faint" style="padding:9px 8px;">${T3('No real price history available for this instrument and timeframe.', 'لا توجد بيانات سعرية حقيقية لهذا الرمز والإطار.')}</td>` : `
+        <td class="mono" style="padding:9px 8px;">${r.trades}</td><td class="mono" style="padding:9px 8px;">${r.winRate.toFixed(0)}%</td><td class="mono" style="padding:9px 8px;">${r.be.toFixed(0)}%</td>
+        <td class="mono" style="padding:9px 8px;color:${plColor(r.edge)}">${r.edge >= 0 ? '+' : ''}${r.edge.toFixed(1)}</td>
+        <td class="mono" style="padding:9px 8px;color:${plColor(r.ret)}">${fmtPct(r.ret)}</td>
+        <td class="mono" style="padding:9px 8px;color:${r.oosRet === null ? 'var(--text-faint)' : plColor(r.oosRet)}">${r.oosRet === null ? 'N/A' : fmtPct(r.oosRet)}</td>`}
+        <td style="padding:9px 8px;"><span class="badge ${vcls[r.verdict] || 'badge-dim'}">${esc(r.verdict)}</span></td>
+        <td style="padding:9px 0 9px 8px;"><button class="btn btn-outline btn-sm" data-action="use-template" data-idx="${r.i}">${T3('Use', 'استخدم')}</button></td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+
 function renderTemplates() {
   const markets = ['All', 'US stocks', 'UK stocks', 'Forex', 'Crypto', 'Other'], fams = ['All', 'Day trading', 'Scalping (1M)', 'Trend', 'Mean reversion', 'Breakout', 'Momentum'];
   const m = State.tplMarket || 'All', f = State.tplFamily || 'All';
@@ -7893,6 +8267,7 @@ function renderTemplates() {
   <div class="asset-pills" style="margin-bottom:12px;">${markets.map(x => `<button type="button" class="asset-pill ${m === x ? 'on' : ''}" data-action="tpl-market" data-val="${x}">${x === 'All' ? T3('All', 'الكل') : esc(x)} (${count(x)})</button>`).join('')}</div>
   <div class="pill-group-label">${T3('Style', 'النمط')}</div>
   <div class="asset-pills" style="margin-bottom:16px;">${fams.map(x => `<button type="button" class="asset-pill ${f === x ? 'on' : ''}" data-action="tpl-family" data-val="${x}">${x === 'All' ? T3('All', 'الكل') : esc(x)}</button>`).join('')}</div>
+  ${renderTplScreenPanel()}
   <div id="tpl-results">${renderTemplateResults()}</div>`;
 }
 
@@ -8022,16 +8397,18 @@ function renderLiveTradeLogSection(s) {
     <div class="panel-head"><h3>${icon('bolt')} Real trade log <span class="badge badge-long" style="margin-left:6px;">Live · Alpaca</span></h3>${log && log.length ? `<span class="faint" style="font-size:11.5px;">${log.length} real trade${log.length === 1 ? '' : 's'}</span> <button class="btn btn-ghost btn-sm" data-action="export-real-trades-csv" data-id="${s.id}">Export CSV</button>` : ''}</div>
     ${log === null ? `<div class="empty-state" style="padding:24px 20px;">${icon('bolt')}<p>Loading real trade history…</p></div>` :
       !log.length ? `<div class="empty-state" style="padding:24px 20px;">${icon('bolt')}<p>No real trades yet, this strategy is watching for a genuine entry signal. Every real order it places will show up here.</p></div>` :
-      `<div style="overflow-x:auto;">
+      `<div style="overflow:auto;max-height:520px;">
         <table class="trade-table">
-          <thead><tr><th>Opened</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Status</th></tr></thead>
+          <thead><tr><th>Opened</th><th>Closed</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Status</th></tr></thead>
           <tbody>
             ${log.map(tr => `<tr>
-              <td class="mono faint">${new Date(tr.opened_at).toLocaleString()}</td>
+              <td class="mono faint" style="white-space:nowrap;">${fmtTs(tr.opened_at)}</td>
+              <td class="mono faint" style="white-space:nowrap;">${tr.closed_at ? fmtTs(tr.closed_at) : '<span class="faint">Still open</span>'}</td>
               <td class="${tr.side === 'sell' ? 'side-short' : 'side-long'}">${tr.side.toUpperCase()}</td>
               <td class="mono">${tr.qty}</td>
               <td class="mono">${parseFloat(tr.entry_price).toFixed(priceDecimals(tr.symbol))}</td>
               <td class="mono">${tr.exit_price ? parseFloat(tr.exit_price).toFixed(priceDecimals(tr.symbol)) : 'N/A'}</td>
+              <td class="mono">${(() => { if (!tr.exit_price) return 'N/A'; const e = parseFloat(tr.entry_price), x = parseFloat(tr.exit_price), q = parseFloat(tr.qty), pl = (tr.side === 'sell' ? e - x : x - e) * q; return `<span style="color:${pl >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtMoney(pl)}</span>`; })()}</td>
               <td>${tr.status === 'open' ? `<span class="badge badge-long"><span class="dot"></span>Open</span>` : `<span class="badge badge-dim">Closed</span>`}</td>
             </tr>`).join('')}
           </tbody>
@@ -8060,11 +8437,13 @@ function renderDetail() {
         `<button class="btn btn-outline btn-sm" data-action="publish-strategy" data-id="${s.id}" ${!bt ? 'disabled title="Backtest this strategy first"' : ''}>${icon('globe')} Publish to Community</button>`}
     </div>
   </div>
+  ${s.copiedFromId && String(s.copiedFromId).indexOf('template:') !== 0 ? `<div class="panel panel-pad" style="margin-bottom:16px;border-left:3px solid var(--brand,#6aa9ff);font-size:13px;line-height:1.6;"><b>This is your copy of a community strategy.</b> It is a draft: nothing is deployed and no orders are placed. ${bt ? 'The numbers below are from your own backtest.' : 'It has no results of its own yet. Press Backtest to test it with your settings before you go live.'} You can edit any rule. Changes by the original trader will not change your copy.</div>` : ''}
   ${v3DetailExtras(s)}
   ${renderLiveChart(s)}
   ${renderStrategyChat(s)}
   ${renderLiveAuditSection(s)}
   ${renderLiveTradeLogSection(s)}
+  ${renderSimTradeLogSection(s)}
   ${bt ? `
   <div class="grid-4">
     <div class="panel stat-card"><div class="label">Win rate</div><div class="value" data-countup="${bt.winRate}" data-countup-fmt="winrate">${bt.winRate}%</div></div>
@@ -8100,13 +8479,14 @@ function renderDetail() {
     <div class="chart-wrap"><canvas data-chart data-animate="1" data-grid="1" data-dot="1" data-points='${esc(JSON.stringify(bt.curve))}' style="width:100%;height:100%;"></canvas></div>
   </div>
   <div class="panel panel-pad">
-    <div class="panel-head"><h3>Trade log</h3><span class="faint" style="font-size:11.5px;">Most recent ${(bt.tradeLog || []).length}</span> <button class="btn btn-ghost btn-sm" data-action="export-backtest-trades-csv" data-id="${s.id}">Export CSV</button></div>
-    <div style="overflow-x:auto;">
+    <div class="panel-head"><h3>Trade log</h3><span class="faint" style="font-size:11.5px;">${(bt.tradeLog || []).length < bt.trades ? 'Showing ' + (bt.tradeLog || []).length + ' of ' + bt.trades + ' trades, loading the rest' : 'All ' + bt.trades + ' trades'}</span> <button class="btn btn-ghost btn-sm" data-action="export-backtest-trades-csv" data-id="${s.id}">Export CSV</button></div>
+    <div style="overflow:auto;max-height:460px;">
       <table class="trade-table">
-        <thead><tr><th>Date</th><th>Side</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Result</th></tr></thead>
+        <thead><tr><th>Opened</th><th>Closed</th><th>Side</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Result</th></tr></thead>
         <tbody>
           ${(bt.tradeLog || []).map(tr => `<tr>
-            <td class="mono faint">${new Date(tr.ts).toLocaleDateString()}</td>
+            <td class="mono faint" style="white-space:nowrap;">${tr.openTs ? fmtTs(tr.openTs) : '<span class="faint">N/A</span>'}</td>
+            <td class="mono faint" style="white-space:nowrap;">${fmtTs(tr.closeTs || tr.ts)}</td>
             <td class="${tr.side === 'short' ? 'side-short' : 'side-long'}">${tr.side.toUpperCase()}</td>
             <td>${tr.entryPrice.toFixed(priceDecimals(s.symbol))}</td>
             <td>${tr.exitPrice.toFixed(priceDecimals(s.symbol))}</td>
@@ -8116,6 +8496,7 @@ function renderDetail() {
         </tbody>
       </table>
     </div>
+    <p class="faint" style="font-size:11.5px;margin:10px 0 0;line-height:1.5;">Times are shown in ${esc(tzNote())}. They are the start time of the candle each trade entered and exited on${bt.dataSource === 'simulated' ? ', so they are estimates for simulated data' : ''}.</p>
   </div>
   ${renderCodeExport(s)}
   ` : `
@@ -9813,6 +10194,32 @@ function renderModal() {
   if (m.type && m.type.indexOf('v3-') === 0) return v3Modal(m);
   if (m.type && m.type.indexOf('v7-') === 0) return v7Modal(m);
   if (m.type === 'golive') return renderGoLiveModal(m);
+  if (m.type === 'copy-confirm') {
+    const e = (Array.isArray(State.community) ? State.community : []).find(x => x.id === m.entryId);
+    if (!e) return '';
+    const conds = (e.entryConditions || []).length;
+    const stat = e.pending ? '' : `<div style="display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 2px;font-size:13px;"><div>Their backtest return<br><b class="mono" style="color:${e.totalReturn >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtPct(e.totalReturn)}</b></div><div>Win rate<br><b class="mono">${e.winRate}%</b></div><div>Max drawdown<br><b class="mono">-${e.maxDrawdown}%</b></div></div>`;
+    return `<div class="modal-overlay" data-action="close-modal">
+      <div class="modal" style="max-width:520px;" data-action="noop">
+        <h3>Copy "${esc(e.name)}"?</h3>
+        <div class="sub">by ${esc(e.ownerName || 'a trader')} · ${esc(e.symbol)} · ${esc(e.timeframe)} · ${esc(e.direction)}</div>
+        ${stat}
+        <div style="margin:14px 0 6px;font-weight:600;font-size:13px;">What happens when you copy</div>
+        <ul style="margin:0 0 12px 18px;padding:0;font-size:13px;line-height:1.7;">
+          <li><b>You get your own editable draft</b> in My Strategies, named "${esc(e.name)} (copy)".</li>
+          <li><b>Rules are copied:</b> ${conds} entry condition${conds === 1 ? '' : 's'}, take profit, stop loss, position size and leverage. You can change any of them.</li>
+          <li><b>Nothing is traded.</b> The copy is not deployed and no orders are placed until you press Go live yourself.</li>
+          <li><b>The results above are theirs, not yours.</b> Run a backtest on your copy to see how it performs with your settings.</li>
+          <li><b>Not copied:</b> their trades, account, money or future changes. If they edit the original later, your copy stays as it is.</li>
+          <li>The original trader sees +1 on their copy count.</li>
+        </ul>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+          <button type="button" class="btn btn-primary" data-action="copy-confirm-go" data-id="${e.id}">${icon('copy')} Copy to my strategies</button>
+        </div>
+      </div>
+    </div>`;
+  }
   if (m.type === 'ai-generate') {
     return `<div class="modal-overlay" data-action="close-modal">
       <div class="modal" style="max-width:480px;" data-action="noop">
@@ -10394,7 +10801,7 @@ function onDelegatedClick(e) {
       saveUser(); render();
       break;
     }
-    case 'view-strategy': State.detailId = el.getAttribute('data-id'); State.view = 'detail'; window.scrollTo(0, 0); render(); loadLiveTradeLog(State.detailId); loadRealLiveStatus(); break;
+    case 'view-strategy': State.detailId = el.getAttribute('data-id'); State.view = 'detail'; window.scrollTo(0, 0); render(); loadLiveTradeLog(State.detailId); loadRealLiveStatus(); restoreFullBacktestLog(State.detailId); pfLoadSimTrades(true); break;
     case 'duplicate-strategy': {
       const s = State.user.strategies.find(x => x.id === el.getAttribute('data-id'));
       if (!s) break;
@@ -10405,6 +10812,7 @@ function onDelegatedClick(e) {
       saveUser(); render(); toast('Strategy duplicated.', 'ok');
       break;
     }
+    case 'tpl-screen-run': tplScreenRun(); break;
     case 'use-template': {
       const tpl = TEMPLATES[parseInt(el.getAttribute('data-idx'), 10)];
       if (!tpl) break;
@@ -10419,7 +10827,9 @@ function onDelegatedClick(e) {
       render(); toast('Template loaded, tweak it, then save.', 'ok');
       break;
     }
-    case 'copy-community': copyCommunityStrategy(el.getAttribute('data-id')); break;
+    case 'copy-community': State.modal = { type: 'copy-confirm', entryId: el.getAttribute('data-id') }; render(); break;
+    case 'admin-usage-days': State.adminUsageDays = parseInt(el.getAttribute('data-days'), 10) || 30; State.adminUsage = null; render(); loadAdminUsage(); break;
+    case 'copy-confirm-go': State.modal = null; copyCommunityStrategy(el.getAttribute('data-id')); break;
     case 'view-profile': {
       const uname = el.getAttribute('data-username');
       if (!uname) break;
@@ -10513,9 +10923,9 @@ function onDelegatedClick(e) {
       if (view === 'markets' && State.community === null) { loadCommunity(); }
       if (view === 'feed' && State.community === null) { loadCommunity(); }
       if (view === 'broker' && State.waitlist === null) { loadWaitlist(); }
-      if (view === 'admin') { loadAdminCodes(); }
+      if (view === 'admin') { loadAdminCodes(); loadAdminUsage(); }
       if (view === 'dashboard') { loadRealLiveStatus(); loadBrokerHealth(); loadRealPortfolio(); }
-      if (view === 'portfolio') { loadRealLiveStatus(); loadRealPortfolio(); }
+      if (view === 'portfolio') { loadRealLiveStatus(); loadRealPortfolio(); pfLoadTrades(); pfLoadSimTrades(true); }
       if (view === 'achievements') {
         if (State.community === null) loadCommunity();
         if (State.follows === null) loadFollows();
@@ -10601,7 +11011,7 @@ function onDelegatedClick(e) {
       const id = el.getAttribute('data-id'); const mode = el.getAttribute('data-mode');
       const s = State.user.strategies.find(x => x.id === id);
       if (!s) break;
-      State.modal = { type: 'golive', stratId: id, mode, brokerId: null, ack: false };
+      State.modal = { type: 'golive', stratId: id, mode, brokerId: null, ack: false, repeat: mode === 'live', maxLosses: mode === 'live' ? '3' : '' };
       if (mode === 'live') { loadRiskStatus(); loadRealPortfolio(); loadBrokerHealth(); }
       render(); break;
     }
@@ -10938,8 +11348,8 @@ async function deployStrategyToBroker(s, mode, brokerId) {
         }),
       });
       const data = await res.json();
-      V3.pendingOpts = null;
-      if (res.status === 412) { V3.settings = null; State.modal = { type: 'golive', stratId: s.id, mode: 'live', brokerId, typed: '', ack: false }; render(); toast(data.error || 'A safety check stopped this.', 'err'); return; }
+      const po_ = V3.pendingOpts; V3.pendingOpts = null;
+      if (res.status === 412) { V3.settings = null; State.modal = { type: 'golive', stratId: s.id, mode: 'live', brokerId, typed: '', ack: false, repeat: !!(po_ && po_.repeat), maxLosses: (po_ && po_.maxConsecutiveLosses) ? String(po_.maxConsecutiveLosses) : '3' }; render(); toast(data.error || 'A safety check stopped this.', 'err'); return; }
       if (!res.ok) { toast(data.error || 'Could not start live monitoring.', 'err'); return; }
     } catch (e) {
       toast('Could not reach the server to start live monitoring. Is the backend running?', 'err');
@@ -10947,12 +11357,25 @@ async function deployStrategyToBroker(s, mode, brokerId) {
     }
   }
 
+  let simStarted = false;
+  if (mode === 'demo') {
+    try {
+      if (await backendAvailable()) {
+        const res = await fetch('/api/sim/deploy', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()), body: JSON.stringify({
+          strategyId: s.id, strategyName: s.name, symbol: s.symbol, timeframe: s.timeframe, direction: s.direction === 'short' ? 'short' : 'long',
+          entryConditions: s.entryConditions, takeProfit: s.takeProfit, stopLoss: s.stopLoss, positionSizePct: s.positionSizePct, trailingStopPct: trailPctOf(s) || null }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) simStarted = true; else toast(data.error || 'Forward-testing could not start, so this demo will not record trades.', 'err');
+      }
+    } catch (e) { /* demo still deploys, it just records nothing */ }
+    if (simStarted) pfLoadSimTrades(true);
+  }
   s.status = mode; s.brokerId = brokerId;
   logActivity(mode === 'live' ? 'deploy' : 'strategy', `${mode === 'live' ? 'Went live with' : 'Deployed to demo:'} "${s.name}" on ${b ? b.name : 'broker'}`);
   saveUser(); render();
   toast(mode === 'live'
     ? `"${s.name}" is now live-monitored via ${b.name}, real market data, will place a real (paper) order the moment your conditions genuinely fire.`
-    : `"${s.name}" is now in demo mode (no orders sent) via ${b ? b.name : 'your broker'}.`, 'ok');
+    : simStarted ? `"${s.name}" is now forward-testing on live prices with simulated fills. No order is sent to any broker. Trades appear on Portfolio.` : `"${s.name}" is now in demo mode (no orders sent) via ${b ? b.name : 'your broker'}.`, 'ok');
   checkAchievements();
 }
 
@@ -11605,7 +12028,7 @@ async function v3LoadSys() {
   v3UpdateBanners();
 }
 async function v3LoadAlerts() { return v3Once('alerts', async () => { const r = await v3api('GET', '/api/alerts'); V3.alerts = r.ok ? r.data.alerts : []; V3.alertLimit = r.ok ? r.data.limit : 3; if (!r.ok) V3.alertsError = (r.data && r.data.error) || 'Could not load alerts.'; render(); }); }
-async function v3LoadJournal() { return v3Once('journal', async () => { const r = await v3api('GET', '/api/live/journal?limit=150'); V3.journal = r.ok ? { trades: r.data.trades || [] } : { unavailable: true, trades: [] }; render(); }); }
+async function v3LoadJournal() { return v3Once('journal', async () => { const r = await v3api('GET', '/api/live/journal?limit=1000'); V3.journal = r.ok ? { trades: r.data.trades || [] } : { unavailable: true, trades: [] }; render(); }); }
 async function v3Load2fa() { return v3Once('2fa', async () => { const r = await v3api('GET', '/api/auth/2fa/status'); V3.tfa = r.ok ? r.data : { enabled: false, unavailable: true }; render(); }); }
 async function v3LoadSessions() { return v3Once('sessions', async () => { const r = await v3api('GET', '/api/auth/sessions'); V3.sessions = r.ok ? r.data.sessions : []; render(); }); }
 
@@ -12280,7 +12703,7 @@ function v3Download(name, mime, text) {
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
 }
 async function v3FetchRecords(year) {
-  if (year === 'all') { const r = await v3api('GET', '/api/live/journal?limit=200'); return r.ok ? { year: 'all', trades: r.data.trades } : null; }
+  if (year === 'all') { const r = await v3api('GET', '/api/live/journal?limit=1000'); return r.ok ? { year: 'all', trades: r.data.trades } : null; }
   const r = await v3api('GET', '/api/records/trades?year=' + encodeURIComponent(year)); return r.ok ? r.data : null;
 }
 async function v3ExportCsv(year) {
@@ -12434,6 +12857,10 @@ function v3Click(action, el) {
     /* journal */
     case 'v3-toggle-trade': { const id = parseInt(A('data-id'), 10); V3.openTrade = V3.openTrade === id ? null : id; render(); return true; }
     case 'v3-journal-filter': V3.journalFilter = A('data-f'); render(); return true;
+    case 'pf-trade-filter': V3.pfFilter = A('data-f'); V3.pfLimit = 100; render(); return true;
+    case 'pf-trades-more': V3.pfLimit = (V3.pfLimit || 100) + 200; render(); return true;
+    case 'pf-trades-csv': pfTradesCsv(); return true;
+    case 'sim-trades-more': V3.simLimit = (V3.simLimit || 50) + 200; render(); return true;
     case 'v3-journal-for': V3.journalStrategy = A('data-id'); V3.journalFilter = 'all'; State.view = 'journal'; render(); window.scrollTo(0, 0); return true;
     case 'v3-export-csv': v3ExportCsv(A('data-year') || V3.year); return true;
     case 'v3-statement': v3Statement(A('data-year') || V3.year); return true;
@@ -12551,6 +12978,7 @@ function v3Change(t, field) {
   if (field === 'v3-daily-hour') { v3SaveSettings({ notify: { dailyHourUtc: parseInt(t.value, 10) } }, T3('Saved.', 'تم الحفظ.')); return true; }
   if (field === 'v3-year') { V3.year = parseInt(t.value, 10); render(); return true; }
   if (field === 'v3-journal-strategy') { V3.journalStrategy = t.value; render(); return true; }
+  if (field === 'pf-trade-strategy') { V3.pfStrat = t.value; V3.pfLimit = 100; render(); return true; }
   const d = V3.alertDraft;
   if (d && field === 'v3-alert-tf') { d.timeframe = t.value; return true; }
   if (d && field === 'v3-alert-repeat') { d.repeat = t.checked; return true; }
@@ -13217,13 +13645,13 @@ function renderPortfolioReal() {
   const strategies = State.user.strategies || [];
   const demo = strategies.filter(s => s.status === 'demo').length;
   const c = realCapitalSummary();
-  const demoNote = demo ? `<div class="panel compact-note" style="margin-bottom:16px;"><p>${T3(`${demo} strateg${demo === 1 ? 'y is' : 'ies are'} in demo mode. Demo trades are practice runs on simulated prices, so they are not counted anywhere on this page.`, `${demo} من الاستراتيجيات في الوضع التجريبي. الصفقات التجريبية للتدرب على أسعار محاكاة، لذلك لا تُحتسب في هذه الصفحة.`)}</p></div>` : '';
+  const demoNote = demo ? `<div class="panel compact-note" style="margin-bottom:16px;"><p>${T3(`${demo} strateg${demo === 1 ? 'y is' : 'ies are'} in demo mode. Demo strategies forward-test on live prices with simulated fills. Those practice trades are listed separately and are never counted in your real totals.`, `${demo} من الاستراتيجيات في الوضع التجريبي. الصفقات التجريبية للتدرب على أسعار محاكاة، لذلك لا تُحتسب في هذه الصفحة.`)}</p></div>` : '';
   if (!c.loading && !c.b) {
     return `<div class="panel panel-pad" style="text-align:center;padding:56px 24px;margin-bottom:16px;">
       <div style="width:56px;height:56px;border-radius:14px;background:var(--brand-bg);color:var(--brand);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">${icon('chartBars')}</div>
       <h3 style="margin-bottom:6px;">${T3('Your real portfolio shows up here', 'محفظتك الحقيقية تظهر هنا')}</h3>
       <p class="muted" style="max-width:460px;margin:0 auto 16px;line-height:1.6;">${c.unavailable ? T3('Real account data needs the VaticTrader backend, which is not reachable here.', 'بيانات الحساب الحقيقية تحتاج خادم المنصة وهو غير متاح هنا.') : T3('This page only shows real money at your broker: balance, positions, results of strategies that traded for real, and your risk limits. Connect a broker to see it. Nothing here is ever simulated.', 'تعرض هذه الصفحة الأموال الحقيقية لدى الوسيط فقط: الرصيد والمراكز ونتائج الاستراتيجيات التي تداولت فعليًا وحدود المخاطر. اربط وسيطًا لرؤيتها. لا شيء هنا محاكى.')}</p>
-      <button class="btn btn-primary" data-action="nav" data-view="broker">${icon('broker')} ${T3('Connect a broker', 'اربط وسيطًا')}</button></div>${demoNote}`;
+      <button class="btn btn-primary" data-action="nav" data-view="broker">${icon('broker')} ${T3('Connect a broker', 'اربط وسيطًا')}</button></div>${renderSimTradesPanel()}${demoNote}`;
   }
   return `${renderRealPortfolioSections(strategies, v6EquityPanel() + v6ExposurePanel())}
     ${renderPortfolioAgentSection()}

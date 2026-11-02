@@ -327,3 +327,68 @@ ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS email_code_attempts INTEGER N
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notify_email_last_error TEXT;
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notify_telegram_last_error TEXT;
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notify_telegram_linked_at TIMESTAMPTZ;
+
+-- Simulated forward-testing: demo strategies run on live prices with simulated fills (no orders are ever sent).
+CREATE TABLE IF NOT EXISTS sim_deployments (
+  id SERIAL PRIMARY KEY,
+  username TEXT NOT NULL,
+  strategy_id TEXT NOT NULL,
+  strategy_name TEXT,
+  symbol TEXT NOT NULL,
+  timeframe TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  entry_conditions JSONB NOT NULL,
+  take_profit_pct NUMERIC NOT NULL,
+  stop_loss_pct NUMERIC NOT NULL,
+  position_size_pct NUMERIC NOT NULL DEFAULT 2,
+  trail_pct NUMERIC,
+  status TEXT NOT NULL DEFAULT 'watching',
+  needs_reset BOOLEAN NOT NULL DEFAULT false,
+  last_error TEXT,
+  last_checked_at TIMESTAMPTZ,
+  data_source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (username, strategy_id)
+);
+CREATE TABLE IF NOT EXISTS sim_trade_log (
+  id SERIAL PRIMARY KEY,
+  username TEXT NOT NULL,
+  strategy_id TEXT NOT NULL,
+  strategy_name TEXT,
+  symbol TEXT NOT NULL,
+  side TEXT NOT NULL,
+  qty NUMERIC NOT NULL,
+  entry_price NUMERIC NOT NULL,
+  exit_price NUMERIC,
+  entry_bar_t BIGINT,
+  trail_peak NUMERIC,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'open',
+  close_reason TEXT,
+  cost_pct NUMERIC NOT NULL DEFAULT 0.1
+);
+CREATE INDEX IF NOT EXISTS idx_sim_trade_log_lookup ON sim_trade_log(username, strategy_id);
+
+-- Usage analytics for the admin dashboard. Privacy by design: no IP, no user
+-- agent, no username. A user is stored only as a salted one-way hash so
+-- "distinct users per day" can be counted. Detailed rows are kept 90 days,
+-- then collapsed into daily totals (usage_daily_users) and deleted.
+CREATE TABLE IF NOT EXISTS usage_daily (
+  day    DATE NOT NULL,
+  event  TEXT NOT NULL,
+  count  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, event)
+);
+CREATE TABLE IF NOT EXISTS usage_event_users (
+  day    DATE NOT NULL,
+  event  TEXT NOT NULL,
+  uhash  TEXT NOT NULL,
+  PRIMARY KEY (day, event, uhash)
+);
+CREATE TABLE IF NOT EXISTS usage_daily_users (
+  day    DATE NOT NULL,
+  event  TEXT NOT NULL,
+  users  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, event)
+);
