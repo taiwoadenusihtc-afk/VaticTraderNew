@@ -558,6 +558,132 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;letter-spac
 .cx-code.code-block{border:0;border-radius:0;max-height:none;overflow:visible;flex:1;min-width:0;padding-inline-start:8px;background:transparent;}
 @media (prefers-reduced-motion:reduce){.bk-ln.on,.cx-fl{animation:none;}}
 
+
+/* ---- Journal v2 ---- */
+.jr-tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap;}
+.jr-tab{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--text-dim);cursor:pointer;display:flex;gap:8px;align-items:center;}
+.jr-tab:hover{color:var(--text);}.jr-tab.on{color:var(--text);border-bottom-color:var(--brand,#FF4FA3);}
+.jr-tab small{font-size:11px;font-weight:700;padding:1px 7px;border-radius:20px;background:var(--panel-alt);border:1px solid var(--border);color:var(--text-dim);}
+.jr-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+.jr-bar .grp{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.jr-bar .sep{width:1px;height:22px;background:var(--border);}
+.jr-search,.jr-bar select.input{width:auto;min-width:170px;}.jr-search{max-width:230px;}
+.jr-tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px;}
+.jr-tbl th{font-size:10.5px;letter-spacing:.05em;color:var(--text-faint);font-weight:600;padding:8px 8px;text-align:right;position:sticky;top:0;background:var(--panel);cursor:pointer;white-space:nowrap;user-select:none;}
+.jr-tbl th.l,.jr-tbl td.l{text-align:left;}.jr-tbl th:hover{color:var(--text);}.jr-tbl th.on{color:var(--text);}
+.jr-tbl td{padding:9px 7px;text-align:right;border-top:1px solid var(--border-soft,rgba(255,255,255,.06));white-space:nowrap;}
+.jr-tbl tr.jrr{cursor:pointer;}.jr-tbl tr.jrr:hover td{background:rgba(255,255,255,.03);}
+.jr-tbl tr.jrr.open td{background:rgba(255,255,255,.04);}
+.jr-tbl tr.jrr td:first-child{border-inline-start:3px solid transparent;}
+.jr-tbl tr.jrr.w td:first-child{border-inline-start-color:var(--long);}.jr-tbl tr.jrr.x td:first-child{border-inline-start-color:var(--short);}.jr-tbl tr.jrr.o td:first-child{border-inline-start-color:#5B8DEF;}
+.jr-tbl tr.det td{white-space:normal;text-align:left;background:var(--panel-alt);padding:0;}
+.jr-det{padding:14px 18px 16px;max-width:760px;}
+.jr-pg{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);}
+.jr-pg .grp{display:flex;gap:6px;align-items:center;}
+.jr-two{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;margin-top:14px;}
+@media(max-width:900px){.jr-two{grid-template-columns:1fr;}}
+.jr-mini{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border-soft,rgba(255,255,255,.06));font-size:12.5px;cursor:pointer;}
+.jr-mini:first-of-type{border-top:0;}
+.jr-mini .m{flex:1;min-width:0;}.jr-mini .m div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* ---- Usage dashboard v3 ---- */
+.usg3-top{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+@media(max-width:1000px){.usg3-top{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:520px){.usg3-top{grid-template-columns:1fr;}}
+.usg3-card{position:relative;padding:14px 16px 10px;border-radius:16px;border:1px solid var(--border);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 14%,var(--panel-alt)),var(--panel-alt) 70%);overflow:hidden;min-height:128px;}
+.usg3-card .l{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);display:flex;justify-content:space-between;align-items:center;}
+.usg3-card .v{font-family:var(--font-mono);font-size:30px;font-weight:600;line-height:1.1;margin:6px 0 2px;}
+.usg3-card .s{font-size:11.5px;color:var(--text-dim);position:relative;z-index:1;}
+.usg3-card svg.sp{position:absolute;left:0;right:0;bottom:0;width:100%;height:46px;opacity:.9;}
+.usg3-d{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:var(--font-sans,inherit);letter-spacing:0;text-transform:none;}
+.usg3-d.up{color:#2ED9A8;background:rgba(46,217,168,.12);}.usg3-d.dn{color:#FB6A6A;background:rgba(251,106,106,.12);}.usg3-d.fl{color:var(--text-dim);background:rgba(255,255,255,.06);}
+.usg3-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;margin-bottom:14px;}
+@media(max-width:900px){.usg3-row{grid-template-columns:1fr;}}
+.usg3-box{border:1px solid var(--border);border-radius:16px;padding:16px 18px;background:var(--panel-alt);min-width:0;}
+.usg3-box h4{font-size:13.5px;margin:0 0 2px;}.usg3-box .sub{font-size:11.5px;color:var(--text-faint);margin-bottom:10px;}
+.usg3-chart{position:relative;margin-left:30px;}
+.usg3-chart svg{display:block;width:100%;height:210px;overflow:visible;}
+.usg3-yl{position:absolute;left:-30px;width:24px;text-align:right;font-size:10px;color:var(--text-faint);font-family:var(--font-mono);transform:translateY(-50%);}
+.usg3-hv rect{fill:transparent;}.usg3-hv line{stroke:rgba(255,255,255,.35);stroke-width:1;opacity:0;vector-effect:non-scaling-stroke;}
+.usg3-hv:hover line{opacity:1;}.usg3-hv:hover rect{fill:rgba(255,255,255,.04);}
+.usg3-x{display:flex;justify-content:space-between;margin:6px 0 0 30px;font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono);}
+.usg3-leg{display:flex;gap:14px;font-size:11.5px;color:var(--text-dim);margin-bottom:6px;flex-wrap:wrap;}
+.usg3-leg i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-inline-end:6px;vertical-align:middle;}
+.usg3-donut{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.usg3-donut svg{width:132px;height:132px;flex:0 0 132px;}
+.usg3-donut .k{font-size:12.5px;display:grid;gap:7px;}.usg3-donut .k div{display:flex;align-items:center;gap:8px;}
+.usg3-donut .k i{width:10px;height:10px;border-radius:3px;}.usg3-donut .k b{font-family:var(--font-mono);margin-inline-start:auto;padding-inline-start:12px;}
+.usg3-wk{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:16px;}
+.usg3-wk div{border-radius:8px;padding:8px 0;text-align:center;font-size:10.5px;color:var(--text-dim);background:rgba(91,141,239,var(--a,.06));border:1px solid rgba(255,255,255,.05);}
+.usg3-wk b{display:block;font-family:var(--font-mono);font-size:13px;color:var(--text);margin-top:2px;}
+.usg3-fun{display:grid;gap:6px;}
+.usg3-fs{display:flex;flex-direction:column;align-items:center;}
+.usg3-fs .bar{height:34px;border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:12px;font-size:12.5px;color:#0B0F17;font-weight:600;min-width:190px;max-width:100%;white-space:nowrap;overflow:hidden;}
+.usg3-fs .bar b{font-family:var(--font-mono);}
+.usg3-fs .dr{font-size:10.5px;color:var(--text-faint);height:14px;line-height:14px;}
+.usg3-rank{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 40px 40px;gap:10px;align-items:center;font-size:12.5px;padding:6px 0;border-top:1px solid rgba(255,255,255,.05);}
+.usg3-rank.h{border:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);}
+.usg3-rank .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:7px;}
+.usg3-rank .t i{width:7px;height:7px;border-radius:50%;flex:0 0 7px;}
+.usg3-rank .m{text-align:right;font-family:var(--font-mono);}
+.usg3-rank .bar{height:7px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;}.usg3-rank .bar div{height:100%;border-radius:4px;}
+.usg3-live{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.usg3-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--panel-alt);font-size:12px;}
+.usg3-pill i{width:8px;height:8px;border-radius:50%;background:#2ED9A8;box-shadow:0 0 0 0 rgba(46,217,168,.6);animation:usgpulse 1.8s infinite;}
+@keyframes usgpulse{70%{box-shadow:0 0 0 7px rgba(46,217,168,0);}100%{box-shadow:0 0 0 0 rgba(46,217,168,0);}}
+@media (prefers-reduced-motion:reduce){.usg3-pill i{animation:none;}}
+/* ---- Export code page v2 + admin usage v2 ---- */
+.cx-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.cx-step{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:14px;border:1px solid var(--border);background:var(--panel);}
+.cx-step .n{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:linear-gradient(135deg,#2ED9A8,#5B8DEF);color:#0B0F17;}
+.cx-step b{display:block;font-size:13.5px;margin-bottom:2px;}.cx-step span{font-size:12px;color:var(--text-dim);line-height:1.5;}
+@media(max-width:760px){.cx-steps{grid-template-columns:1fr;}}
+.cx-pick{display:flex;gap:18px;flex-wrap:wrap;align-items:center;}
+.cx-pick select{flex:1 1 280px;max-width:460px;}
+.cx-sum{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.cx-badge{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.03em;text-transform:uppercase;border:1px solid var(--border);background:var(--panel-alt);}
+.cx-badge.long{color:#2ED9A8;border-color:rgba(46,217,168,.45);background:rgba(46,217,168,.08);}
+.cx-badge.short{color:#FB6A6A;border-color:rgba(251,106,106,.45);background:rgba(251,106,106,.08);}
+.cx-badge.both{color:#5B8DEF;border-color:rgba(91,141,239,.45);background:rgba(91,141,239,.08);}
+.cx-actions{display:flex;gap:8px;align-items:center;}
+.cx-how{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;margin-top:16px;}
+.cx-how>div{padding:12px 14px;border-radius:12px;background:var(--panel-alt);border:1px solid var(--border);font-size:12.5px;line-height:1.55;}
+.cx-how h4{font-size:12.5px;margin:0 0 6px;display:flex;align-items:center;gap:8px;}
+.cx-how h4 i{font-style:normal;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--panel);border:1px solid var(--border);}
+.cx-how ol{margin:0;padding-inline-start:18px;color:var(--text-dim);}.cx-how li{margin:3px 0;}
+.cx-note{margin-top:14px;padding:10px 14px;border-radius:12px;border:1px dashed var(--border);font-size:12px;color:var(--text-dim);line-height:1.6;}
+.usg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+@media(max-width:900px){.usg-grid{grid-template-columns:repeat(2,1fr);}}
+.usg-stat{padding:14px 16px;border-radius:14px;border:1px solid var(--border);background:var(--panel-alt);position:relative;overflow:hidden;}
+.usg-stat:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--c,#5B8DEF);}
+.usg-stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);}
+.usg-stat .v{font-family:var(--font-mono);font-size:26px;font-weight:600;margin:4px 0 2px;}
+.usg-stat .s{font-size:11.5px;color:var(--text-dim);}
+.usg-sec{border:1px solid var(--border);border-radius:14px;padding:14px 16px;background:var(--panel-alt);}
+.usg-sec h4{font-size:13px;margin:0 0 2px;}.usg-sec .sub{font-size:11.5px;color:var(--text-faint);margin-bottom:12px;}
+.usg-chart{position:relative;height:160px;margin:4px 0 0 34px;}
+.usg-grid-l{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.08);}
+.usg-grid-l span{position:absolute;left:-34px;top:-8px;width:28px;text-align:right;font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono);}
+.usg-bars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:3px;}
+.usg-col{flex:1;min-width:2px;height:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px;}
+.usg-col i{display:block;width:100%;border-radius:3px 3px 0 0;min-height:0;}
+.usg-col .vv{background:linear-gradient(180deg,#5B8DEF,rgba(91,141,239,.45));}
+.usg-col .ss{background:#2ED9A8;max-width:50%;}
+.usg-col.today .vv{background:linear-gradient(180deg,#FF4FA3,rgba(255,79,163,.45));}
+.usg-col:hover{background:rgba(255,255,255,.05);}
+.usg-x{display:flex;justify-content:space-between;margin:6px 0 0 34px;font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono);}
+.usg-leg{display:flex;gap:14px;font-size:11.5px;color:var(--text-dim);margin-bottom:8px;flex-wrap:wrap;}
+.usg-leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-inline-end:5px;}
+.usg-fn{margin:9px 0;}.usg-fn .top{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;gap:8px;}
+.usg-fn .top b{font-family:var(--font-mono);}.usg-fn .pc{font-size:11px;color:var(--text-faint);}
+.usg-track{height:8px;border-radius:4px;background:rgba(255,255,255,.06);margin-top:4px;overflow:hidden;}
+.usg-track div{height:100%;border-radius:4px;background:linear-gradient(90deg,#5B8DEF,#2ED9A8);}
+.usg-rank{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 44px 44px;gap:10px;align-items:center;font-size:12.5px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05);}
+.usg-rank.h{border:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);}
+.usg-rank .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.usg-rank .m{text-align:right;font-family:var(--font-mono);}
+.usg-rank .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;}.usg-rank .bar div{height:100%;background:#FF4FA3;border-radius:3px;}
+.usg-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px;margin-top:14px;}
+
+
 /* ---- V8: journal ---- */
 .jv{margin-bottom:16px;background:radial-gradient(120% 100% at 0% 0%,rgba(46,217,168,.06),transparent 55%);}
 .jv-top{display:grid;grid-template-columns:auto auto 1fr;gap:22px;align-items:center;}
@@ -1752,6 +1878,7 @@ const SIGNAL_RADAR_SVG = `<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/20
 </svg>`;
 
 const ICONS = {
+  download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>`,
   pause: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
   zap: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>`,
   gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v9h14v-9M12 8c-2.5 0-4-1-4-2.5S9.5 3 11 4.5 12 8 12 8zm0 0c2.5 0 4-1 4-2.5S14.5 3 13 4.5 12 8 12 8z"/></svg>`,
@@ -2505,10 +2632,101 @@ TEMPLATE_RECIPES_2.push(
   { n: 'Forex Range Reversion (Short)', tf: '15m', dir: 'short', tp: 0.2, sl: 0.25, sz: 1, trail: false, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD'], conds: [c_('bbands', 'price breaks upper band'), c_('rsi', 'is above', 65), c_('adx', 'is below', 25)], fam: 'Mean reversion', basis: 'Sells an upper-band stretch on 15-minute forex when RSI is above 65 and ADX is low. Set your own cost in Settings for a fair backtest.', blurb: 'Fades range-bound forex spikes.' },
   { n: 'Forex Trend Pullback', tf: '15m', dir: 'long', tp: 0.3, sl: 0.2, sz: 1, trail: false, syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD'], conds: [{ indicator: 'custom_equation', language: 'native', operator: '', value: 'CLOSE > EMA(50) AND RSI(14) < 42' }, c_('adx', 'is above', 22)], fam: 'Trend', basis: 'Buys RSI dips inside a forex uptrend (above 50 EMA, ADX above 22) with a 1.5 to 1 reward to risk, so it does not need a very high win rate to break even.', blurb: 'Buys forex dips inside an uptrend.' }
 );
+
+/* ---------------- US scalping and day-trading library: every idea comes as a Long and a mirrored Short ---------------- */
+const TEMPLATE_RECIPES_3 = [];
+(function buildUsIntraday() {
+  const US = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'AMD'];
+  const eq = (v) => ({ indicator: 'custom_equation', language: 'native', operator: '', value: v });
+  // pair(name, tf, family, [longConds, shortConds], tp, sl, size, blurb, basis, opts)
+  const pair = (n, tf, fam, cs, tp, sl, sz, blurb, basis, o) => {
+    o = o || {};
+    [['long', cs[0]], ['short', cs[1]]].forEach(([dir, conds]) => {
+      if (!conds) return;
+      TEMPLATE_RECIPES_3.push({ n: n + (dir === 'long' ? ' (Long)' : ' (Short)'), tf, dir, tp, sl, sz, trail: !!o.trail, tpct: o.tpct || 0, syms: o.syms || US, conds, fam, blurb: blurb[dir === 'long' ? 0 : 1], basis });
+    });
+  };
+  // ----- scalping (5-minute bars) -----
+  pair('Drive Breakout Scalp', '5m', 'Breakout',
+    [[c_('breakout', 'breaks above N-bar high', 12), c_('volume', 'is above average by', 160), c_('adx', 'is above', 20)], [c_('breakout', 'breaks below N-bar low', 12), c_('volume', 'is above average by', 160), c_('adx', 'is above', 20)]],
+    0.5, 0.35, 0.75, ['Buys a 12-bar high break on heavy volume in a trending tape.', 'Sells a 12-bar low break on heavy volume in a trending tape.'],
+    'Short-range breakouts that come with a volume surge and a rising ADX are the textbook momentum-scalp setup. The volume and ADX filters skip quiet drift where breaks fail.');
+  pair('EMA Pullback Scalp', '5m', 'Trend',
+    [[eq('CLOSE > EMA(50) AND RSI(14) < 35'), c_('adx', 'is above', 20)], [eq('CLOSE < EMA(50) AND RSI(14) > 65'), c_('adx', 'is above', 20)]],
+    0.4, 0.3, 0.75, ['Buys a sharp dip inside an up-trend (price above its 50 EMA, RSI under 35).', 'Sells a sharp bounce inside a down-trend (price below its 50 EMA, RSI over 65).'],
+    'Trades with the larger trend and only enters after a short, sharp counter-move, so the stop sits just beyond the pullback. ADX above 20 keeps it out of flat markets.');
+  pair('Stochastic Snapback Scalp', '5m', 'Mean reversion',
+    [[c_('stochastic', 'is below', 15), c_('rsi', 'is below', 35), c_('adx', 'is below', 25)], [c_('stochastic', 'is above', 85), c_('rsi', 'is above', 65), c_('adx', 'is below', 25)]],
+    0.35, 0.35, 0.75, ['Buys an oversold snap in a range-bound market.', 'Sells an overbought spike in a range-bound market.'],
+    'Fades extremes only when ADX says the market is ranging. In strong trends these setups lose, which is why the ADX filter is mandatory.');
+  pair('Volume Climax Reversal Scalp', '5m', 'Mean reversion',
+    [[c_('volume', 'is above average by', 300), c_('rsi', 'is below', 25)], [c_('volume', 'is above average by', 300), c_('rsi', 'is above', 75)]],
+    0.45, 0.4, 0.75, ['Buys a washout: a 4x volume spike with RSI deeply oversold.', 'Sells a blow-off: a 4x volume spike with RSI deeply overbought.'],
+    'Capitulation and blow-off bars often mark short-term exhaustion. It trades rarely, so check the trade count before trusting any result.');
+  pair('Momentum Burst Scalp', '5m', 'Momentum',
+    [[c_('roc', 'is above', 0.5), c_('adx', 'is above', 25), c_('pricevsema', 'is above')], [c_('roc', 'is below', -0.5), c_('adx', 'is above', 25), c_('pricevsema', 'is below')]],
+    0.5, 0.35, 0.75, ['Joins a fast upward burst with trend strength behind it.', 'Joins a fast downward burst with trend strength behind it.'],
+    'Rides short bursts of rate-of-change when ADX confirms a trend. Tight stop, small target, because late entries give back gains quickly.');
+  pair('Keltner Scalp Breakout', '5m', 'Breakout',
+    [[c_('keltner', 'price breaks upper band'), c_('volume', 'is above average by', 150)], [c_('keltner', 'price breaks lower band'), c_('volume', 'is above average by', 150)]],
+    0.5, 0.35, 0.75, ['Buys a close outside the upper ATR channel on rising volume.', 'Sells a close outside the lower ATR channel on rising volume.'],
+    'An ATR-based channel adapts to volatility, so the breakout threshold widens in fast markets. Volume filters out thin, false pokes.');
+  pair('Williams Snapback Scalp', '5m', 'Mean reversion',
+    [[c_('williamsr', 'is below', -92), c_('adx', 'is below', 25)], [c_('williamsr', 'is above', -8), c_('adx', 'is below', 25)]],
+    0.3, 0.35, 0.75, ['Buys an extreme Williams %R low in a ranging market.', 'Sells an extreme Williams %R high in a ranging market.'],
+    'Very short-term reversion at the edges of a range. Small target, so trading costs matter: check the "costs doubled" column in the screener.');
+  TEMPLATE_RECIPES_3.push({ n: 'VWAP Rejection Trend Scalp (Short)', tf: '5m', dir: 'short', tp: 0.45, sl: 0.4, sz: 0.75, trail: false, syms: US, fam: 'Trend',
+    conds: [c_('vwap', 'price crosses below'), c_('pricevsema', 'is below'), c_('adx', 'is above', 20)], blurb: 'Sells a drop back below VWAP when the short-term trend is already down.',
+    basis: 'The mirror of the VWAP Reclaim scalp: institutions benchmark to VWAP, so a rejection from it in a down-trend is a common intraday short.' });
+  // ----- day trading (15 and 30-minute bars) -----
+  pair('EMA Cross Day Trade', '15m', 'Trend',
+    [[c_('ema_cross', 'fast crosses above slow', '9/21'), c_('adx', 'is above', 22), c_('pricevssma', 'is above')], [c_('ema_cross', 'fast crosses below slow', '9/21'), c_('adx', 'is above', 22), c_('pricevssma', 'is below')]],
+    0.9, 0.6, 1, ['Buys a 9/21 EMA bullish cross when ADX shows a trend.', 'Sells a 9/21 EMA bearish cross when ADX shows a trend.'],
+    'Moving-average crosses whipsaw in ranges, so ADX and the 20 SMA filter keep it to trending sessions. A trailing stop lets winners run.', { trail: true, tpct: 0.4 });
+  TEMPLATE_RECIPES_3.push({ n: 'MACD Trend Day Trade (Short)', tf: '15m', dir: 'short', tp: 0.8, sl: 0.5, sz: 1, trail: true, tpct: 0.35, syms: US, fam: 'Trend',
+    conds: [c_('macd', 'crosses below signal'), c_('adx', 'is above', 25), c_('pricevssma', 'is below')], blurb: 'Sells a MACD bearish cross only when the trend is already down.',
+    basis: 'The mirror of the MACD Trend Day Trade: a bearish cross is only taken when ADX shows trend strength and price is below its 20 SMA.' });
+  pair('Keltner Breakout Day Trade', '15m', 'Breakout',
+    [[c_('keltner', 'price breaks upper band'), c_('adx', 'is above', 22), c_('volume', 'is above average by', 150)], [c_('keltner', 'price breaks lower band'), c_('adx', 'is above', 22), c_('volume', 'is above average by', 150)]],
+    1.0, 0.6, 1, ['Buys a volatility-channel breakout with volume and trend strength.', 'Sells a volatility-channel breakdown with volume and trend strength.'],
+    'Channel breakouts with confirmation from volume and ADX. A 1.0% target against a 0.6% stop gives positive reward-to-risk, but only if the breakout follows through.');
+  pair('Aroon Trend Day Trade', '30m', 'Trend',
+    [[c_('aroon', 'is above', 60), c_('adx', 'is above', 25), c_('pricevsema', 'is above')], [c_('aroon', 'is below', -60), c_('adx', 'is above', 25), c_('pricevsema', 'is below')]],
+    1.2, 0.8, 1, ['Buys when Aroon shows a fresh up-trend with ADX strength.', 'Sells when Aroon shows a fresh down-trend with ADX strength.'],
+    'Aroon measures how recently the highs and lows were made. Strong readings with ADX above 25 point to an established trend rather than noise.');
+  pair('MFI Exhaustion Fade', '15m', 'Mean reversion',
+    [[c_('mfi', 'is below', 20), c_('rsi', 'is below', 35)], [c_('mfi', 'is above', 80), c_('rsi', 'is above', 65)]],
+    0.7, 0.6, 1, ['Buys when volume-weighted money flow and RSI are both oversold.', 'Sells when volume-weighted money flow and RSI are both overbought.'],
+    'Requires two independent oscillators, one volume-based, to agree. Fewer signals than RSI alone, aimed at stronger exhaustion.');
+  pair('CCI Extreme Reversal', '15m', 'Mean reversion',
+    [[c_('cci', 'is below', -150), c_('rsi', 'is below', 35)], [c_('cci', 'is above', 150), c_('rsi', 'is above', 65)]],
+    0.7, 0.6, 1, ['Buys an extreme CCI low confirmed by oversold RSI.', 'Sells an extreme CCI high confirmed by overbought RSI.'],
+    'Commodity Channel Index beyond plus or minus 150 marks a stretched move; RSI confirmation reduces early entries.');
+  pair('Channel Edge Fade', '15m', 'Mean reversion',
+    [[c_('donchianpos', 'is below', 5), c_('rsi', 'is below', 35), c_('adx', 'is below', 25)], [c_('donchianpos', 'is above', 95), c_('rsi', 'is above', 65), c_('adx', 'is below', 25)]],
+    0.6, 0.5, 1, ['Buys the bottom of a 20-bar channel when the market is ranging.', 'Sells the top of a 20-bar channel when the market is ranging.'],
+    'Range trading at the edges of a 20-bar channel, valid only while ADX stays low. If ADX rises the range may be breaking out and the fade fails.');
+  pair('Volume Breakout 30m', '30m', 'Breakout',
+    [[c_('breakout', 'breaks above N-bar high', 30), c_('volume', 'is above average by', 180)], [c_('breakout', 'breaks below N-bar low', 30), c_('volume', 'is above average by', 180)]],
+    1.4, 0.8, 1, ['Buys a 30-bar high break on strong volume, with a trailing stop.', 'Sells a 30-bar low break on strong volume, with a trailing stop.'],
+    'Larger-timeframe breakouts have fewer false starts than 5-minute ones. The trailing stop lets the occasional big move pay for the failures.', { trail: true, tpct: 0.5 });
+  pair('Trend Pullback 30m', '30m', 'Trend',
+    [[eq('CLOSE > EMA(100) AND RSI(14) < 40'), c_('adx', 'is above', 20)], [eq('CLOSE < EMA(100) AND RSI(14) > 60'), c_('adx', 'is above', 20)]],
+    1.0, 0.7, 1, ['Buys a pullback in an established up-trend.', 'Sells a rally in an established down-trend.'],
+    'Waits for a counter-move inside a trend defined by the 100 EMA, then enters when RSI is stretched the other way.');
+  pair('Bollinger Reversion Day Trade', '15m', 'Mean reversion',
+    [[c_('bbands', 'price breaks lower band'), c_('rsi', 'is below', 30), c_('adx', 'is below', 22)], [c_('bbands', 'price breaks upper band'), c_('rsi', 'is above', 70), c_('adx', 'is below', 22)]],
+    0.5, 0.5, 1, ['Buys a close below the lower Bollinger band in a quiet market.', 'Sells a close above the upper Bollinger band in a quiet market.'],
+    'Classic band reversion restricted to low-ADX conditions. Equal target and stop means it needs a win rate clearly above 50% after costs.');
+  pair('Momentum ROC Day Trade', '15m', 'Momentum',
+    [[c_('roc', 'is above', 0.8), c_('adx', 'is above', 25), c_('pricevssma', 'is above')], [c_('roc', 'is below', -0.8), c_('adx', 'is above', 25), c_('pricevssma', 'is below')]],
+    1.0, 0.65, 1, ['Buys strong upward momentum that ADX says is a real trend.', 'Sells strong downward momentum that ADX says is a real trend.'],
+    'Momentum persists over short horizons more often than not, but reverses sharply at turning points. The 0.65% stop keeps those reversals small.');
+})();
 (function buildRecipeTemplates() {
   const seen = new Set(TEMPLATES.map(t => t.name));
   const lists = { 'US stocks': [], 'UK stocks': [], Forex: [], Crypto: [] };
-  TEMPLATE_RECIPES.concat(TEMPLATE_RECIPES_2).forEach(r => r.syms.forEach(sym => {
+  TEMPLATE_RECIPES.concat(TEMPLATE_RECIPES_2, TEMPLATE_RECIPES_3).forEach(r => r.syms.forEach(sym => {
     if (!SYMBOLS.includes(sym)) return;
     const name = sym + ' ' + r.n;
     if (seen.has(name)) return; seen.add(name);
@@ -2530,9 +2748,9 @@ function templateFamily(t) {
   if (has(/^(ema_cross|sma_cross|macd|adx|aroon|trix|awesome|pricevs)/)) return 'Trend';
   return 'Momentum';
 }
-const DAY_TFS = ['5m', '15m', '30m'];
+const SCALP_TFS = ['1m', '5m'], DAY_TFS = ['15m', '30m'];
 function templateStyleMatch(t, f) {
-  if (f === 'Scalping (1M)') return t.timeframe === '1m';
+  if (f === 'Scalping') return SCALP_TFS.includes(t.timeframe);
   if (f === 'Day trading') return DAY_TFS.includes(t.timeframe);
   return templateFamily(t) === f;
 }
@@ -5071,7 +5289,7 @@ async function loadRealBars(symbol, timeframe, force) {
   if (!force && hit && (hit.bars || Date.now() - (hit.at || 0) < 300000)) return hit.bars ? hit : null;
   if (!(await backendAvailable())) { State.realBars[key] = { unavailable: true, error: 'Real market data needs the VaticTrader backend.', at: Date.now() }; return null; }
   try {
-    const res = await fetch(`/api/market/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=1500`, { headers: authHeaders() });
+    const res = await fetch(`/api/market/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=${({ '5m': 4700, '1m': 2800 })[timeframe] || 1500}`, { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
     if (res.ok && Array.isArray(data.bars) && data.bars.length) { State.realBars[key] = { bars: data.bars, source: data.source, from: data.from, to: data.to, at: Date.now() }; return State.realBars[key]; }
     State.realBars[key] = { unavailable: true, error: data.error || 'No real history available.', at: Date.now() };
@@ -5921,7 +6139,7 @@ function renderShell() {
   const u = State.user;
   const initials = (u.name || u.username).split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
   const billing = billingDisplay();
-  const titles = { dashboard: [t('nav_dashboard'), t('dashboard_subtitle')], strategies: [t('nav_my_strategies'), 'Create, test and deploy trading rules'], portfolio: ['Portfolio', T3('Your real broker account: balance, positions and results. Nothing simulated.', 'حسابك الحقيقي لدى الوسيط: الرصيد والمراكز والنتائج. لا شيء محاكى.')], builder: [State.editingId ? 'Edit Strategy' : 'New Strategy', 'Define entry rules, risk and exits'], broker: [t('nav_broker'), 'Link accounts to trade on demo or live'], settings: [t('nav_settings'), t('settings_subtitle')], templates: [t('nav_example_strategies'), 'Start from a classic, widely studied rule set'], community: [t('nav_community'), 'Browse and copy strategies from other traders'], markets: [t('nav_markets'), 'Price, crowd lean and instrument analysis'], feed: [t('nav_feed'), 'Activity from traders you follow'], profile: [(State.profileUsername && State.profileUsername !== State.user.username) ? 'Trader Profile' : t('nav_profile'), 'Public identity, bio and published strategies'], achievements: [t('nav_achievements'), 'Level, streak and unlocked badges'], developer: [t('nav_code_export'), 'Export Pine Script & MQL5 code'], detail: [detailStrategy() ? detailStrategy().name : 'Strategy', 'Performance detail & trade log'], learning: [t('nav_learning'), 'Short guides to get you trading smarter'], admin: ['Admin', 'Every redemption code across all users'], journal: [T3('Trade journal', 'سجل التداول'), T3('Every real trade, with the reason it entered', 'كل صفقة حقيقية مع سبب دخولها')], alerts: [T3('Alerts', 'التنبيهات'), T3('Get told when your conditions are met, without deploying', 'احصل على إشعار عند تحقق شروطك دون نشر')] };
+  const titles = { dashboard: [t('nav_dashboard'), t('dashboard_subtitle')], strategies: [t('nav_my_strategies'), 'Create, test and deploy trading rules'], portfolio: ['Portfolio', T3('Your real broker account: balance, positions and results. Nothing simulated.', 'حسابك الحقيقي لدى الوسيط: الرصيد والمراكز والنتائج. لا شيء محاكى.')], builder: [State.editingId ? 'Edit Strategy' : 'New Strategy', 'Define entry rules, risk and exits'], broker: [t('nav_broker'), 'Link accounts to trade on demo or live'], settings: [t('nav_settings'), t('settings_subtitle')], templates: [t('nav_example_strategies'), 'Start from a classic, widely studied rule set'], community: [t('nav_community'), 'Browse and copy strategies from other traders'], markets: [t('nav_markets'), 'Price, crowd lean and instrument analysis'], feed: [t('nav_feed'), 'Activity from traders you follow'], profile: [(State.profileUsername && State.profileUsername !== State.user.username) ? 'Trader Profile' : t('nav_profile'), 'Public identity, bio and published strategies'], achievements: [t('nav_achievements'), 'Level, streak and unlocked badges'], developer: [t('nav_code_export'), 'Export Pine Script & MQL5 code'], detail: [detailStrategy() ? detailStrategy().name : 'Strategy', 'Performance detail & trade log'], learning: [t('nav_learning'), 'Short guides to get you trading smarter'], admin: ['Admin', 'Usage, billing and redemption codes'], journal: [T3('Trade journal', 'سجل التداول'), T3('Every real trade, with the reason it entered', 'كل صفقة حقيقية مع سبب دخولها')], alerts: [T3('Alerts', 'التنبيهات'), T3('Get told when your conditions are met, without deploying', 'احصل على إشعار عند تحقق شروطك دون نشر')] };
   const [title, crumb] = titles[State.view] || titles.dashboard;
   const unread = (u.activity || []).filter(a => a.ts > (u.lastSeenActivityAt || 0)).length;
   const stratCount = (u.strategies || []).length;
@@ -6979,35 +7197,98 @@ function statusBadge(status) {
 
 const USAGE_LABELS = { 'visit': 'Visit', 'signup': 'Signed up', 'strategy_created': 'Created a strategy', 'backtest_run': 'Ran a backtest', 'sim_deploy': 'Started demo trading', 'broker_connect': 'Connected a broker', 'live_deploy': 'Went live', 'copy_strategy': 'Copied a strategy', 'publish_strategy': 'Published a strategy' };
 function usageLabel(e) { if (USAGE_LABELS[e]) return USAGE_LABELS[e]; if (e.indexOf('view:') === 0) { const v = e.slice(5).replace(/[-_]/g, ' '); return 'Opened screen: ' + v; } return e; }
+function usgSmooth(pts, lo, hi) {
+  const cl = y => (lo === undefined ? y : Math.min(hi, Math.max(lo, y)));
+  if (pts.length < 2) return pts.length ? `M${pts[0][0]},${pts[0][1]}` : '';
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0].toFixed(1)},${cl(c1[1]).toFixed(1)} ${c2[0].toFixed(1)},${cl(c2[1]).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+function usgSpark(vals, color, id) {
+  const W = 200, H = 46, n = vals.length, mx = Math.max(1, ...vals);
+  if (n < 2) return '';
+  const pts = vals.map((v, i) => [i / (n - 1) * W, H - 4 - (v / mx) * (H - 12)]);
+  const ln = usgSmooth(pts, 2, H - 4);
+  return `<svg class="sp" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".45"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${ln} L${W},${H} L0,${H} Z" fill="url(#${id})"/><path d="${ln}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function usgDelta(vals) {
+  const n = vals.length; if (n < 4) return '';
+  const h = Math.floor(n / 2), prev = vals.slice(0, h).reduce((a, b) => a + b, 0), cur = vals.slice(n - h).reduce((a, b) => a + b, 0);
+  if (!prev && !cur) return `<span class="usg3-d fl">no change</span>`;
+  if (!prev) return `<span class="usg3-d up">new</span>`;
+  const pc = Math.round((cur - prev) / prev * 100);
+  return `<span class="usg3-d ${pc > 0 ? 'up' : pc < 0 ? 'dn' : 'fl'}" title="Second half of the period vs the first half">${pc > 0 ? '+' : ''}${pc}%</span>`;
+}
 function renderAdminUsage() {
   const u = State.adminUsage, days = State.adminUsageDays || 30;
   const sel = `<div style="display:flex;gap:6px;">${[7, 30, 90].map(d => `<button class="btn ${d === days ? 'btn-primary' : 'btn-ghost'} btn-sm" data-action="admin-usage-days" data-days="${d}">${d} days</button>`).join('')}</div>`;
-  if (u === null || u === undefined) return `<div class="panel panel-pad" style="margin-bottom:20px;"><div class="panel-head"><h3>${icon('chart')} Usage</h3>${sel}</div><p class="muted">Loading usage…</p></div>`;
-  if (u.error) return `<div class="panel panel-pad" style="margin-bottom:20px;"><div class="panel-head"><h3>${icon('chart')} Usage</h3>${sel}</div><p class="muted">${esc(u.error)}</p></div>`;
-  const t = u.totals || {}, a = u.active || {}, series = u.series || [];
-  const maxV = Math.max(1, ...series.map(x => Math.max(x.visitors, x.signups)));
-  const bars = series.map(x => `<div title="${x.day}: ${x.visitors} visitors, ${x.signups} signups" style="flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:1px;"><div style="height:${Math.round(x.visitors / maxV * 100)}%;background:var(--brand);border-radius:2px 2px 0 0;min-height:${x.visitors ? 2 : 0}px;"></div><div style="height:${Math.round(x.signups / maxV * 100)}%;background:var(--long);min-height:${x.signups ? 2 : 0}px;"></div></div>`).join('');
-  const f = u.funnel || [], top = Math.max(1, f[0] ? f[0].users : 1, ...f.map(x => x.users));
-  const funnel = f.map((x, i) => `<div style="margin:6px 0;"><div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>${i + 1}. ${esc(usageLabel(x.event))}</span><b class="mono">${x.users}</b></div><div style="height:6px;background:var(--bg-2,#222);border-radius:3px;"><div style="height:100%;width:${Math.round(x.users / top * 100)}%;background:var(--brand);border-radius:3px;"></div></div></div>`).join('');
-  const rows = (u.events || []).slice(0, 14).map(e => `<tr><td>${esc(usageLabel(e.event))}</td><td class="mono" style="text-align:right;">${e.count}</td><td class="mono" style="text-align:right;">${e.users}</td></tr>`).join('');
-  const lv = u.live || {};
-  const stat = (l, v, sub) => `<div class="panel stat-card"><div class="label">${l}</div><div class="value">${v === null || v === undefined ? 'n/a' : v}</div>${sub ? `<div class="faint" style="font-size:11.5px;">${sub}</div>` : ''}</div>`;
+  const head = `<div class="panel-head"><h3>${icon('chart')} Usage and tracking</h3>${sel}</div>`;
+  if (u === null || u === undefined) return `<div class="panel panel-pad" style="margin-bottom:20px;">${head}<p class="muted">Loading usage…</p></div>`;
+  if (u.error) return `<div class="panel panel-pad" style="margin-bottom:20px;">${head}<p class="muted">${esc(u.error)}</p></div>`;
+  const t = u.totals || {}, a = u.active || {}, lv = u.live || {}, series = u.series || [], n = series.length;
+  const vis = series.map(x => x.visitors), sig = series.map(x => x.signups);
+  const maxV = Math.max(1, ...vis, ...sig), nice = Math.max(4, Math.ceil(maxV / 4) * 4);
+  // chart
+  const W = 800, H = 210, X = i => n > 1 ? i / (n - 1) * W : W / 2, Y = v => H - 6 - (v / nice) * (H - 14);
+  const vp = vis.map((v, i) => [X(i), Y(v)]), sp = sig.map((v, i) => [X(i), Y(v)]);
+  const vline = usgSmooth(vp, 0, H - 6), sline = usgSmooth(sp, 0, H - 6);
+  const grid = [0, 1, 2, 3, 4].map(k => { const y = Y(k * nice / 4); return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.07)" stroke-dasharray="3 5" vector-effect="non-scaling-stroke"/>`; }).join('');
+  const ylab = [0, 1, 2, 3, 4].map(k => `<span class="usg3-yl" style="top:${(Y(k * nice / 4) / H * 100).toFixed(1)}%;">${Math.round(k * nice / 4)}</span>`).join('');
+  const cw = n > 1 ? W / (n - 1) : W;
+  const hov = series.map((x, i) => `<g class="usg3-hv"><title>${esc(x.day)}: ${x.visitors} visitors, ${x.signups} signups</title><rect x="${(X(i) - cw / 2).toFixed(1)}" y="0" width="${cw.toFixed(1)}" height="${H}"/><line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="0" y2="${H}"/></g>`).join('');
+  const chart = n ? `<div class="usg3-chart">${ylab}<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Daily visitors and signups"><defs><linearGradient id="usgV" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#5B8DEF" stop-opacity=".4"/><stop offset="1" stop-color="#5B8DEF" stop-opacity="0"/></linearGradient><linearGradient id="usgS" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2ED9A8" stop-opacity=".3"/><stop offset="1" stop-color="#2ED9A8" stop-opacity="0"/></linearGradient></defs>${grid}
+    <path d="${vline} L${X(n - 1)},${H} L${X(0)},${H} Z" fill="url(#usgV)"/><path d="${sline} L${X(n - 1)},${H} L${X(0)},${H} Z" fill="url(#usgS)"/>
+    <path d="${vline}" fill="none" stroke="#5B8DEF" stroke-width="2.4" vector-effect="non-scaling-stroke"/><path d="${sline}" fill="none" stroke="#2ED9A8" stroke-width="2.4" vector-effect="non-scaling-stroke"/>${hov}</svg></div>
+    <div class="usg3-x"><span>${esc(series[0].day)}</span><span>${n > 2 ? esc(series[Math.floor(n / 2)].day) : ''}</span><span>${esc(series[n - 1].day)}</span></div>` : '<p class="muted">No daily data yet.</p>';
+  const tot = vis.reduce((x, y) => x + y, 0), peak = series.reduce((m, x) => x.visitors > m.visitors ? x : m, { visitors: -1, day: '' });
+  // cumulative signups for total-users sparkline
+  let cum = 0; const cumS = sig.map(v => (cum += v));
+  const card = (l, v, sub, c, spark, delta) => `<div class="usg3-card" style="--c:${c};"><div class="l"><span>${l}</span>${delta || ''}</div><div class="v">${v === null || v === undefined ? 'n/a' : v}</div><div class="s">${sub}</div>${spark || ''}</div>`;
+  const top4 = `<div class="usg3-top">
+    ${card('Total users', t.total, `${t.paid || 0} paid · ${t.trialing || 0} on free trial`, '#5B8DEF', usgSpark(cumS, '#5B8DEF', 'spA'), '')}
+    ${card('Active last 24h', a.d1, `7 days: ${a.d7 || 0} · 30 days: ${a.d30 || 0}`, '#2ED9A8', usgSpark(vis, '#2ED9A8', 'spB'), usgDelta(vis))}
+    ${card('New signups', t.new7, `24h: ${t.new1 || 0} · 30 days: ${t.new30 || 0}`, '#FF4FA3', usgSpark(sig, '#FF4FA3', 'spC'), usgDelta(sig))}
+    ${card('Strategies created', u.strategies, `${lv.live_active || 0} live · ${lv.sim_active || 0} demo running`, '#F2B705', '', '')}
+  </div>`;
+  // donut
+  const paid = t.paid || 0, trial = t.trialing || 0, other = Math.max(0, (t.total || 0) - paid - trial), tt = Math.max(1, paid + trial + other), C = 2 * Math.PI * 46;
+  let off = 0; const seg = (v, c) => { const len = v / tt * C, el = `<circle cx="60" cy="60" r="46" fill="none" stroke="${c}" stroke-width="14" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"/>`; off += len; return v ? el : ''; };
+  const donut = `<div class="usg3-donut"><svg viewBox="0 0 120 120" role="img" aria-label="Users by plan"><circle cx="60" cy="60" r="46" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="14"/>${seg(paid, '#2ED9A8')}${seg(trial, '#5B8DEF')}${seg(other, '#8B93A7')}<text x="60" y="58" text-anchor="middle" font-size="20" font-weight="700" fill="currentColor" font-family="monospace">${t.total || 0}</text><text x="60" y="74" text-anchor="middle" font-size="9" fill="#8B93A7">USERS</text></svg>
+    <div class="k"><div><i style="background:#2ED9A8"></i>Paid<b>${paid}</b></div><div><i style="background:#5B8DEF"></i>Free trial<b>${trial}</b></div><div><i style="background:#8B93A7"></i>Other<b>${other}</b></div></div></div>`;
+  // weekday heat
+  const wd = [0, 0, 0, 0, 0, 0, 0], names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  series.forEach(x => { const d = new Date(x.day + 'T00:00:00Z'); if (!isNaN(d)) wd[(d.getUTCDay() + 6) % 7] += x.visitors; });
+  const wm = Math.max(1, ...wd);
+  const week = `<div class="usg3-wk">${wd.map((v, i) => `<div style="--a:${(0.06 + v / wm * 0.6).toFixed(2)};">${names[i]}<b>${v}</b></div>`).join('')}</div>`;
+  // funnel
+  const f = u.funnel || [], f0 = Math.max(1, f[0] ? f[0].users : 1), cols = ['#5B8DEF', '#4C9FE8', '#3DB5DA', '#2ED9A8', '#7BE495', '#B8E36B', '#F2B705'];
+  const funnel = f.map((x, i) => {
+    const w = Math.max(x.users ? 18 : 0, Math.round(x.users / f0 * 100)), prev = i ? f[i - 1].users : 0;
+    const dr = i && prev ? (x.users >= prev ? `${Math.round(x.users / f0 * 100)}% of visitors` : `${Math.round((1 - x.users / prev) * 100)}% drop-off`) : '';
+    return `<div class="usg3-fs">${i ? `<div class="dr">${dr}</div>` : ''}<div class="bar" style="width:${Math.max(w, 30)}%;background:${cols[i % cols.length]};"><span>${esc(usageLabel(x.event))}</span><b>${x.users}</b></div></div>`;
+  }).join('');
+  // ranking
+  const ev = (u.events || []).slice(0, 14), evMax = Math.max(1, ...ev.map(e => e.count));
+  const rows = ev.map(e => { const scr = /^view:/.test(e.event), c = scr ? '#5B8DEF' : '#FF4FA3'; return `<div class="usg3-rank"><span class="t" title="${esc(usageLabel(e.event))}"><i style="background:${c}"></i>${esc(usageLabel(e.event))}</span><span class="bar"><div style="width:${Math.round(e.count / evMax * 100)}%;background:${c};"></div></span><span class="m">${e.count}</span><span class="m faint">${e.users}</span></div>`; }).join('');
   return `<div class="panel panel-pad" style="margin-bottom:20px;">
-    <div class="panel-head"><h3>${icon('chart')} Usage</h3>${sel}</div>
-    <div class="grid-4" style="margin-bottom:14px;">
-      ${stat('Total users', t.total, `${t.paid || 0} paid · ${t.trialing || 0} on free trial`)}
-      ${stat('Active last 24 hours', a.d1, `7 days: ${a.d7 || 0} · 30 days: ${a.d30 || 0}`)}
-      ${stat('New signups', t.new7, `last 24h: ${t.new1 || 0} · last 30 days: ${t.new30 || 0}`)}
-      ${stat('Strategies created', u.strategies, `${lv.live_active || 0} live and ${lv.sim_active || 0} demo running now`)}
+    ${head}
+    <div class="usg3-live"><span class="usg3-pill"><i></i>${a.d1 || 0} active in the last 24 hours</span><span class="usg3-pill">${lv.live_active || 0} live strategies</span><span class="usg3-pill">${lv.sim_active || 0} demo strategies</span>${u.trackingSince ? `<span class="usg3-pill faint">Tracking since ${esc(u.trackingSince)}</span>` : ''}</div>
+    ${top4}
+    <div class="usg3-row">
+      <div class="usg3-box"><h4>Visitors and signups per day</h4><div class="sub">Signed-in users, last ${u.days} days. ${tot} visits in total${peak.visitors >= 0 ? `, busiest day ${esc(peak.day)} (${peak.visitors})` : ''}. Hover a day for its numbers.</div>
+        <div class="usg3-leg"><span><i style="background:#5B8DEF"></i>Visitors</span><span><i style="background:#2ED9A8"></i>Signups</span></div>${chart}</div>
+      <div class="usg3-box"><h4>Users by plan</h4><div class="sub">Everyone registered</div>${donut}<h4 style="margin-top:18px;">Busiest weekdays</h4><div class="sub">Visitors in this period</div>${week}</div>
     </div>
-    <div style="font-size:12.5px;margin-bottom:6px;"><b>Daily visitors</b> <span class="faint">(signed-in users, last ${u.days} days)</span> <span style="margin-left:10px;"><i style="display:inline-block;width:9px;height:9px;background:var(--brand);border-radius:2px;"></i> visitors &nbsp;<i style="display:inline-block;width:9px;height:9px;background:var(--long);border-radius:2px;"></i> signups</span></div>
-    <div style="display:flex;align-items:flex-end;gap:2px;height:120px;margin-bottom:6px;">${bars}</div>
-    <div class="faint" style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:16px;"><span>${series[0] ? series[0].day : ''}</span><span>${series.length ? series[series.length - 1].day : ''}</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;">
-      <div><div style="font-weight:600;font-size:13px;margin-bottom:4px;">Where users get to (distinct users)</div>${funnel}</div>
-      <div><div style="font-weight:600;font-size:13px;margin-bottom:4px;">Most used screens and features</div>${rows ? `<table style="width:100%;font-size:12.5px;border-collapse:collapse;"><thead><tr class="faint"><th style="text-align:left;font-weight:500;">What</th><th style="text-align:right;font-weight:500;">Times</th><th style="text-align:right;font-weight:500;">Users</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted" style="font-size:12.5px;">No activity recorded yet.</p>'}</div>
+    <div class="usg3-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));">
+      <div class="usg3-box"><h4>Where users get to</h4><div class="sub">Distinct users reaching each step</div><div class="usg3-fun">${funnel || '<p class="muted">No data yet.</p>'}</div></div>
+      <div class="usg3-box"><h4>Most used screens and features</h4><div class="sub"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#5B8DEF;"></i> screens &nbsp;<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#FF4FA3;"></i> actions</div>
+        ${rows ? `<div class="usg3-rank h"><span>What</span><span></span><span class="m">Times</span><span class="m">Users</span></div>${rows}` : '<p class="muted">No activity recorded yet.</p>'}</div>
     </div>
-    <div class="faint" style="font-size:11.5px;margin-top:14px;line-height:1.6;">Counts come from signed-in users only; visitors to the public landing page are not included (use a privacy-friendly web analytics tool for those). No usernames, IP addresses or devices are stored. Users are counted by a one-way hash, detail is deleted after 90 days, and people whose browser sends Do Not Track are not counted. Numbers are approximate. ${u.trackingSince ? 'Tracking started ' + esc(u.trackingSince) + '; earlier days show only signups and logins.' : 'Tracking has not recorded anything yet.'}</div>
+    <div class="faint" style="font-size:11.5px;line-height:1.6;">Counts come from signed-in users only; visitors to the public landing page are not included (use a privacy-friendly web analytics tool for those). No usernames, IP addresses or devices are stored. Users are counted by a one-way hash, detail is deleted after 90 days, and people whose browser sends Do Not Track are not counted. Numbers are approximate.${u.trackingSince ? ' Earlier days show only signups and logins.' : ''}</div>
   </div>`;
 }
 async function loadAdminUsage() {
@@ -8140,9 +8421,9 @@ function renderPostCard(e, opts) {
 /* --------------------------------- TEMPLATES / EXAMPLE STRATEGIES ---------------- */
 const TPL_PAGE = 24;
 function tplFiltered() {
-  const m = State.tplMarket || 'All', f = State.tplFamily || 'All', q = (State.tplQuery || '').trim().toLowerCase();
+  const m = State.tplMarket || 'All', f = State.tplFamily || 'All', q = (State.tplQuery || '').trim().toLowerCase(), dr = State.tplDir || 'All';
   return TEMPLATES.map((t, i) => ({ t, i })).filter(({ t }) =>
-    (m === 'All' || templateMarket(t) === m) && (f === 'All' || templateStyleMatch(t, f)) &&
+    (dr === 'All' || t.direction === dr) && (m === 'All' || templateMarket(t) === m) && (f === 'All' || templateStyleMatch(t, f)) &&
     (!q || (t.name + ' ' + t.symbol + ' ' + t.blurb + ' ' + (t.basis || '')).toLowerCase().includes(q)));
 }
 const TPL_MK = { 'US stocks': ['#5B8DEF', 'US'], 'UK stocks': ['#D4AF6A', 'UK'], Forex: ['#8677F5', 'FX'], Crypto: ['#F59E0B', '₿'], Other: ['#2ED9A8', '+'] };
@@ -8157,7 +8438,7 @@ function renderTemplateCard(t, i) {
   const fam = templateFamily(t), mk = templateMarket(t);
   const [mc, mg] = TPL_MK[mk] || TPL_MK.Other, [fi, fc] = TPL_FAM[fam] || TPL_FAM.Momentum;
   const dirIcon = t.direction === 'short' ? 'down' : t.direction === 'both' ? 'compass' : 'up';
-  const tag = t.timeframe === '1m' ? `<span class="badge badge-short">${T3('1M scalp', 'سكالبينج 1د')}</span>` : DAY_TFS.includes(t.timeframe) ? `<span class="badge badge-info">${T3('Day trade', 'يومي')}</span>` : '';
+  const tag = SCALP_TFS.includes(t.timeframe) ? `<span class="badge badge-short">${T3(t.timeframe === '1m' ? '1M scalp' : '5M scalp', 'سكالبينج')}</span>` : DAY_TFS.includes(t.timeframe) ? `<span class="badge badge-info">${T3('Day trade', 'يومي')}</span>` : '';
   return `<div class="panel template-card tp-card" style="--mc:${mc};--fc:${fc};">
       <div class="tp-banner">
         <div class="tp-mono">${esc(mg)}</div>
@@ -8182,7 +8463,7 @@ function tplHero() {
   const m = State.tplMarket || 'All';
   const tiles = ['US stocks', 'UK stocks', 'Forex', 'Crypto'].map(mk => {
     const n = TEMPLATES.filter(t => templateMarket(t) === mk).length, [c, g] = TPL_MK[mk];
-    const sc = TEMPLATES.filter(t => templateMarket(t) === mk && t.timeframe === '1m').length, dt = TEMPLATES.filter(t => templateMarket(t) === mk && DAY_TFS.includes(t.timeframe)).length;
+    const sc = TEMPLATES.filter(t => templateMarket(t) === mk && SCALP_TFS.includes(t.timeframe)).length, dt = TEMPLATES.filter(t => templateMarket(t) === mk && DAY_TFS.includes(t.timeframe)).length;
     return `<div class="tp-tile ${m === mk ? 'on' : ''}" style="--mc:${c}" data-action="tpl-market" data-val="${mk}" role="button" tabindex="0">
       <div class="tp-tile-g">${esc(g)}</div><div><b>${n}</b><span>${esc(mk)}</span><em>${dt} ${T3('day', 'يومي')} · ${sc} ${T3('scalp', 'سكالب')}</em></div></div>`;
   }).join('');
@@ -8198,64 +8479,267 @@ function renderTemplateResults() {
     ${list.length > n ? `<div style="text-align:center;margin:18px 0;"><button class="btn btn-outline" data-action="tpl-more">${T3('Show more', 'عرض المزيد')} (${list.length - n})</button></div>` : ''}`;
 }
 
-/* ---- Strategy screener: backtest the filtered library on real history and rank it ---- */
-async function tplScreenRun() {
-  if (State.screen && State.screen.running) return;
-  const list = tplFiltered().slice(0, 24);
-  if (!list.length) { toast('No strategies match the current filters.', 'info'); return; }
-  State.screen = { running: true, done: 0, total: list.length, rows: [], skipped: 0, started: Date.now() };
-  render();
-  const pairs = [...new Set(list.map(({ t }) => t.symbol + '|' + t.timeframe))];
-  for (let i = 0; i < pairs.length; i += 3) {
-    await Promise.all(pairs.slice(i, i + 3).map(k => { const [sym, tf] = k.split('|'); return loadRealBars(sym, tf); }));
-  }
-  const costs = backtestCosts(), rt = 2 * (costs.feePct + costs.slipPct);
-  const rows = [];
-  list.forEach(({ t, i }) => {
-    const strat = Object.assign(blankDraft(), JSON.parse(JSON.stringify({ name: t.name, symbol: t.symbol, timeframe: t.timeframe, direction: t.direction, entryConditions: t.entryConditions, takeProfit: t.takeProfit, stopLoss: t.stopLoss, positionSizePct: t.positionSizePct, trailingStop: !!t.trailingStop, trailingStopPct: t.trailingStopPct || 0 })));
-    strat.entryConditions = strat.entryConditions.map(c => Object.assign({ id: uid() }, c));
-    let bt = null; try { bt = runBacktest(strat); } catch (e) { bt = null; }
-    const be = (t.stopLoss + rt) / ((t.takeProfit || 0) + t.stopLoss) * 100;
-    if (!bt || bt.noData) { rows.push({ i, t, verdict: 'No data', rank: 9 }); return; }
-    const out = bt.oos && bt.oos.outSample ? bt.oos.outSample : null;
-    const edge = bt.winRate - be;
-    let verdict = 'Weak', rank = 3;
-    if (bt.trades < 30) { verdict = 'Too few trades'; rank = 5; }
-    else if (out && out.trades >= 5 && out.returnPct < 0) { verdict = 'Fails recent 30%'; rank = 4; }
-    else if (bt.totalReturn > 0 && edge >= 3) { verdict = 'Passes'; rank = 1; }
-    else if (bt.totalReturn > 0) { verdict = 'Marginal'; rank = 2; }
-    rows.push({ i, t, trades: bt.trades, winRate: bt.winRate, be, edge, ret: bt.totalReturn, oosRet: out && out.trades >= 5 ? out.returnPct : null, dd: bt.maxDrawdown, verdict, rank });
-  });
-  rows.sort((a, b) => a.rank - b.rank || (b.edge || -99) - (a.edge || -99));
-  State.screen = { running: false, done: list.length, total: list.length, rows, costs: rt, finished: Date.now() };
-  render();
+/* ---- Strategy screener v2: tests ready-made and your own strategies on real history, across many symbols ---- */
+const SCREEN_MAX_RUNS = 1500, SCREEN_STRESS = 2;
+const SCREEN_SETS = [
+  { id: 'own', label: "Each strategy's own symbol" },
+  { id: 'us_large', label: 'US large caps', syms: ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD'] },
+  { id: 'us_index', label: 'US indices and ETFs', syms: ['SPY', 'QQQ', 'US500', 'NAS100', 'US30'] },
+  { id: 'forex', label: 'Forex majors', syms: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD'] },
+  { id: 'crypto', label: 'Crypto majors', syms: ['BTC/USD', 'ETH/USD', 'SOL/USD', 'XRP/USD', 'ADA/USD', 'DOGE/USD'] },
+  { id: 'commod', label: 'Commodities', syms: ['XAU/USD', 'XAG/USD', 'WTI/USD', 'BRENT/USD', 'NATGAS/USD', 'COPPER/USD'] },
+  { id: 'uk', label: 'UK blue chips', syms: ['HSBA.L', 'BP.L', 'SHEL.L', 'AZN.L', 'ULVR.L', 'BARC.L', 'LLOY.L', 'VOD.L'] },
+  { id: 'saudi', label: 'Saudi blue chips', syms: ['2222.SR', '1120.SR', '2010.SR', '1180.SR', '7010.SR', '1211.SR'] },
+  { id: 'custom', label: 'My own list of symbols' },
+];
+function screenCfg() {
+  if (!State.screenCfg) State.screenCfg = { source: 'templates', set: 'own', custom: '' };
+  return State.screenCfg;
 }
-function renderTplScreenPanel() {
-  const sc = State.screen, n = tplFiltered().length;
-  const head = `<div class="panel-head"><h3>${icon('compass')} ${T3('Strategy screener', 'فاحص الاستراتيجيات')}</h3><button class="btn btn-primary btn-sm" data-action="tpl-screen-run" ${sc && sc.running ? 'disabled' : ''}>${sc && sc.running ? T3('Screening…', 'جار الفحص…') : T3('Screen these on real data', 'افحصها على بيانات حقيقية')}</button></div>`;
-  const intro = `<p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 ${sc && !sc.running ? 12 : 0}px;">${T3(`Backtests up to 24 of the ${n} strategies shown (use the filters above to choose) on real price history, then ranks them. A strategy passes only with 30 or more trades, a positive return, a win rate at least 3 points above its break-even rate after costs, and no loss on the most recent 30% of history. This filters out weak ideas, it does not prove any strategy will make money.`, `يختبر حتى 24 من الاستراتيجيات المعروضة على بيانات سعرية حقيقية ثم يرتبها. لا تنجح الاستراتيجية إلا بـ 30 صفقة فصاعدا وعائد موجب ونسبة ربح تزيد 3 نقاط على نقطة التعادل بعد التكاليف دون خسارة في آخر 30% من البيانات. هذا يستبعد الأفكار الضعيفة ولا يثبت أن أي استراتيجية ستربح.`)}</p>`;
-  if (!sc) return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${intro}</div>`;
-  if (sc.running) return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${intro}<p class="muted" style="font-size:13px;margin:10px 0 0;">${T3('Loading real market history and running backtests…', 'جار تحميل البيانات وتشغيل الاختبارات…')}</p></div>`;
-  const vcls = { Passes: 'badge-long', Marginal: 'badge-info', Weak: 'badge-dim', 'Too few trades': 'badge-dim', 'Fails recent 30%': 'badge-short', 'No data': 'badge-dim' };
-  const pass = sc.rows.filter(r => r.verdict === 'Passes').length, nod = sc.rows.filter(r => r.verdict === 'No data').length;
-  return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${intro}
-    <p style="font-size:13px;margin:0 0 10px;"><b>${pass}</b> ${T3('of', 'من')} ${sc.rows.length} ${T3('passed', 'نجحت')}${nod ? ` · ${nod} ${T3('had no real price history', 'بلا بيانات حقيقية')}` : ''} · ${T3('costs assumed', 'التكاليف')} ${sc.costs.toFixed(2)}% ${T3('per round trip', 'للصفقة')}</p>
-    <div style="overflow:auto;max-height:520px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px;">
-      <thead><tr class="faint" style="font-size:10.5px;text-align:right;position:sticky;top:0;background:var(--panel);"><th style="text-align:left;padding:6px 8px 8px 0;">${T3('STRATEGY', 'الاستراتيجية')}</th><th style="padding:6px 8px 8px;">${T3('TRADES', 'الصفقات')}</th><th style="padding:6px 8px 8px;">${T3('WIN RATE', 'نسبة الربح')}</th><th style="padding:6px 8px 8px;">${T3('BREAK-EVEN', 'التعادل')}</th><th style="padding:6px 8px 8px;">${T3('EDGE', 'الفارق')}</th><th style="padding:6px 8px 8px;">${T3('RETURN', 'العائد')}</th><th style="padding:6px 8px 8px;">${T3('RECENT 30%', 'آخر 30%')}</th><th style="padding:6px 8px 8px;">${T3('RESULT', 'النتيجة')}</th><th style="padding:6px 0 8px 8px;"></th></tr></thead>
-      <tbody>${sc.rows.map(r => `<tr style="border-top:1px solid var(--border-soft);text-align:right;">
-        <td style="text-align:left;padding:9px 8px 9px 0;"><b>${esc(r.t.name)}</b><div class="faint" style="font-size:11px;">${esc(r.t.symbol)} · ${esc(r.t.timeframe)} · +${r.t.takeProfit}% / -${r.t.stopLoss}%</div></td>
-        ${r.trades === undefined ? `<td colspan="6" class="faint" style="padding:9px 8px;">${T3('No real price history available for this instrument and timeframe.', 'لا توجد بيانات سعرية حقيقية لهذا الرمز والإطار.')}</td>` : `
-        <td class="mono" style="padding:9px 8px;">${r.trades}</td><td class="mono" style="padding:9px 8px;">${r.winRate.toFixed(0)}%</td><td class="mono" style="padding:9px 8px;">${r.be.toFixed(0)}%</td>
-        <td class="mono" style="padding:9px 8px;color:${plColor(r.edge)}">${r.edge >= 0 ? '+' : ''}${r.edge.toFixed(1)}</td>
-        <td class="mono" style="padding:9px 8px;color:${plColor(r.ret)}">${fmtPct(r.ret)}</td>
-        <td class="mono" style="padding:9px 8px;color:${r.oosRet === null ? 'var(--text-faint)' : plColor(r.oosRet)}">${r.oosRet === null ? 'N/A' : fmtPct(r.oosRet)}</td>`}
-        <td style="padding:9px 8px;"><span class="badge ${vcls[r.verdict] || 'badge-dim'}">${esc(r.verdict)}</span></td>
-        <td style="padding:9px 0 9px 8px;"><button class="btn btn-outline btn-sm" data-action="use-template" data-idx="${r.i}">${T3('Use', 'استخدم')}</button></td></tr>`).join('')}</tbody></table></div>
+function screenSymbols(cfg) {
+  if (cfg.set === 'own') return null;
+  if (cfg.set === 'custom') return [...new Set(String(cfg.custom || '').toUpperCase().split(/[\s,;]+/).filter(x => /^[A-Z0-9.\/=^-]{1,24}$/.test(x)))].slice(0, 30);
+  const set = SCREEN_SETS.find(x => x.id === cfg.set);
+  return set && set.syms ? set.syms.filter(x => SYMBOLS.includes(x)) : [];
+}
+function screenIdeaKey(t) { return [t.timeframe, t.direction, t.takeProfit, t.stopLoss, t.positionSizePct, JSON.stringify((t.entryConditions || []).map(c => [c.indicator, c.operator, c.value]))].join('|'); }
+function screenIdeaName(t) { return String(t.name).indexOf(t.symbol + ' ') === 0 ? String(t.name).slice(t.symbol.length + 1) : t.name; }
+// The list of backtests a run would do: one per strategy, or one per strategy and symbol when spreading across a list.
+function screenPlan(cfg) {
+  const syms = screenSymbols(cfg), runs = [];
+  if (cfg.source !== 'mine') {
+    const list = tplFiltered().map(x => x.t);
+    if (syms) {
+      const seen = new Set();
+      list.forEach(t => { const k = screenIdeaKey(t); if (seen.has(k)) return; seen.add(k); syms.forEach(sym => runs.push({ kind: 'tpl', t, name: screenIdeaName(t), symbol: sym })); });
+    } else list.forEach(t => runs.push({ kind: 'tpl', t, name: t.name, symbol: t.symbol }));
+  }
+  if (cfg.source !== 'templates') (State.user.strategies || []).forEach(s => {
+    if (syms) syms.forEach(sym => runs.push({ kind: 'mine', s, name: s.name, symbol: sym }));
+    else runs.push({ kind: 'mine', s, name: s.name, symbol: s.symbol });
+  });
+  const pairs = [...new Set(runs.map(r => r.symbol + '|' + (r.kind === 'tpl' ? r.t.timeframe : r.s.timeframe)))];
+  return { runs, pairs, syms };
+}
+function screenSpec(run) {
+  if (run.kind === 'tpl') {
+    const t = run.t;
+    return Object.assign(blankDraft(), JSON.parse(JSON.stringify({ name: t.name, symbol: run.symbol, timeframe: t.timeframe, direction: t.direction, entryConditions: t.entryConditions, takeProfit: t.takeProfit, stopLoss: t.stopLoss, positionSizePct: t.positionSizePct, trailingStop: !!t.trailingStop, trailingStopPct: t.trailingStopPct || 0 })));
+  }
+  const c = JSON.parse(JSON.stringify(run.s, (k, v) => (k === 'backtest' || k === 'tradeLog' || k === '_exprCache') ? undefined : v));
+  c.symbol = run.symbol; return c;
+}
+// Runs one strategy on already-loaded bars: full period, three equal periods, the most recent 30%, and again with costs doubled.
+function screenEval(spec, bars, rtPct) {
+  (spec.entryConditions || []).forEach(c => { delete c._exprCache; });
+  if (!spec.entryConditions || !spec.entryConditions.length) return null;
+  const cache = buildIndicatorCache(bars, spec.entryConditions);
+  const seed = spec.symbol + '|' + spec.timeframe + '|' + spec.takeProfit + '|' + spec.stopLoss;
+  const base = simulateStrategyTrades(spec, bars, cache, seededRandom(seed), rtPct / 100).trades;
+  const hard = simulateStrategyTrades(spec, bars, cache, seededRandom(seed), rtPct * SCREEN_STRESS / 100).trades;
+  const n = base.length, N = bars.length;
+  let eq = 10000, peak = 10000, dd = 0; const marks = [];
+  base.forEach(t => { eq += t.pnl; peak = Math.max(peak, eq); dd = Math.max(dd, (peak - eq) / peak); marks.push([t.exitBar, eq]); });
+  const curve = []; let j = 0, cur = 10000;
+  for (let k = 0; k < 40; k++) { const lim = (k / 39) * N; while (j < marks.length && marks[j][0] <= lim) { cur = marks[j][1]; j++; } curve.push(Math.round(cur)); }
+  const wins = base.filter(t => t.pnl > 0).length, ret = (eq - 10000) / 100;
+  const ret2 = hard.reduce((a, t) => a + t.pnl, 0) / 100;
+  const thirds = [0, 1, 2].map(k => { const lo = N * k / 3, hi = N * (k + 1) / 3, list = base.filter(t => t.entryBar >= lo && t.entryBar < hi); return { n: list.length, r: Math.round(list.reduce((a, t) => a + t.pnl, 0)) / 100 }; });
+  const oosL = base.filter(t => t.entryBar >= N * 0.7), oosRet = oosL.reduce((a, t) => a + t.pnl, 0) / 100;
+  const pos = base.filter(t => t.pnl > 0).map(t => t.pnl).sort((a, b) => b - a), gross = pos.reduce((a, b) => a + b, 0), top3 = pos.slice(0, 3).reduce((a, b) => a + b, 0);
+  const rest = (eq - 10000) - top3;
+  return { trades: n, winRate: n ? 100 * wins / n : 0, ret, ret2, dd: dd * 100, thirds, oosN: oosL.length, oosRet, top3Share: gross > 0 ? top3 / gross * 100 : 0, restOk: rest > 0, curve };
+}
+function screenVerdict(spec, m, rtPct) {
+  const tp = Number(spec.takeProfit) || 0, sl = Number(spec.stopLoss) || 1;
+  const be = (sl + rtPct) / (tp + sl) * 100, edge = m.winRate - be, reasons = [];
+  if (spec.direction === 'both') return { verdict: 'Not testable', rank: 8, reasons: ['A "both" strategy picks long or short at random in backtests, so the result means nothing. Use a Long and a Short version instead.'], be, edge };
+  if (m.trades < 30) return { verdict: 'Too few trades', rank: 6, reasons: [`Only ${m.trades} trades, which is too few to judge.`], be, edge };
+  const pw = m.thirds.filter(x => x.r > 0).length, nw = m.thirds.filter(x => x.n >= 3).length;
+  if (m.ret <= 0) return { verdict: 'Weak', rank: 4, reasons: ['Loses money after costs.'], be, edge };
+  if (m.ret2 <= 0) reasons.push('Loses when costs are doubled.');
+  if (pw < 2) reasons.push(`Profitable in only ${pw} of ${Math.max(nw, 3)} time periods.`);
+  if (m.trades >= 10 && (m.top3Share > 60 || !m.restOk)) reasons.push(`Top 3 trades make ${Math.round(m.top3Share)}% of the profit.`);
+  if (edge < 3) reasons.push('Win rate is barely above break-even.');
+  const recent = m.oosN >= 5 && m.oosRet < 0;
+  if (recent) return { verdict: 'Fails recent 30%', rank: 5, reasons: ['Loses money on the most recent 30% of history.'].concat(reasons), be, edge };
+  if (!reasons.length) return { verdict: 'Passes', rank: 1, reasons: ['Profitable after costs, in most time periods, and with doubled costs.'], be, edge };
+  return { verdict: reasons.length <= 1 ? 'Marginal' : 'Fragile', rank: reasons.length <= 1 ? 2 : 3, reasons, be, edge };
+}
+const SCREEN_KEY = 'vt_screen_v2';
+function screenSave() {
+  try { const sc = State.screen; if (!sc || sc.running) return; localStorage.setItem(SCREEN_KEY + ':' + (State.user ? State.user.username : ''), JSON.stringify({ rows: sc.rows, rt: sc.rt, finished: sc.finished, cfg: sc.cfg, total: sc.total })); } catch (e) {}
+}
+function screenRestore() {
+  if (State.screen || !State.user) return;
+  try { const raw = localStorage.getItem(SCREEN_KEY + ':' + State.user.username); if (!raw) return; const d = JSON.parse(raw); if (d && Array.isArray(d.rows)) State.screen = { running: false, rows: d.rows, rt: d.rt, finished: d.finished, cfg: d.cfg, total: d.total || d.rows.length, restored: true }; } catch (e) {}
+}
+function screenPaint() { const el = document.getElementById('scr-panel'); if (el) el.innerHTML = screenPanelInner(); else render(); }
+function screenProgress(txt, frac) {
+  const t = document.getElementById('scr-prog-t'), b = document.getElementById('scr-prog-b');
+  if (t) t.textContent = txt; if (b) b.style.width = Math.round(frac * 100) + '%';
+}
+const screenTick = () => new Promise(r => setTimeout(r, 0));
+async function screenRun() {
+  if (State.screen && State.screen.running) return;
+  const cfg = screenCfg(), plan = screenPlan(cfg);
+  if (!plan.runs.length) { toast(cfg.set === 'custom' ? 'Type some symbols first.' : 'Nothing to test. Check the filters above, or add a strategy.', 'info'); return; }
+  if (plan.runs.length > SCREEN_MAX_RUNS) { toast(`That is ${plan.runs.length} tests. The limit is ${SCREEN_MAX_RUNS}. Narrow the filters or the symbol list.`, 'err'); return; }
+  const rt = 2 * (backtestCosts().feePct + backtestCosts().slipPct);
+  State.screen = { running: true, cancel: false, rows: [], rt, total: plan.runs.length, cfg: JSON.parse(JSON.stringify(cfg)), started: Date.now() };
+  State.screenSel = []; State.screenSort = null;
+  screenPaint();
+  let loaded = 0;
+  for (let i = 0; i < plan.pairs.length && !State.screen.cancel; i += 3) {
+    await Promise.all(plan.pairs.slice(i, i + 3).map(k => { const [sym, tf] = k.split('|'); return loadRealBars(sym, tf); }));
+    loaded = Math.min(plan.pairs.length, i + 3);
+    screenProgress(`Loading price history ${loaded} of ${plan.pairs.length}`, 0.4 * loaded / plan.pairs.length);
+  }
+  const rows = [];
+  for (let i = 0; i < plan.runs.length && !State.screen.cancel; i++) {
+    const run = plan.runs[i], spec = screenSpec(run);
+    const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
+    const row = { key: [run.kind, run.kind === 'tpl' ? run.t.name : run.s.id, spec.symbol].join('|'), kind: run.kind, ref: run.kind === 'tpl' ? run.t.name : run.s.id, name: run.name, symbol: spec.symbol, tf: spec.timeframe, dir: spec.direction, tp: spec.takeProfit, sl: spec.stopLoss };
+    if (!hit || !hit.bars || hit.bars.length < 150) { row.verdict = 'No data'; row.rank = 9; row.reasons = [(hit && hit.error) || 'No real price history for this symbol and timeframe.']; rows.push(row); }
+    else {
+      let m = null; try { m = screenEval(spec, hit.bars, rt); } catch (e) { m = null; }
+      if (!m) { row.verdict = 'No data'; row.rank = 9; row.reasons = ['This strategy could not be evaluated.']; }
+      else Object.assign(row, m, screenVerdict(spec, m, rt));
+      rows.push(row);
+    }
+    if (i % 4 === 3) { screenProgress(`Testing ${i + 1} of ${plan.runs.length}`, 0.4 + 0.6 * (i + 1) / plan.runs.length); await screenTick(); }
+  }
+  const cancelled = State.screen.cancel;
+  State.screen = { running: false, rows, rt, total: plan.runs.length, cfg: State.screen.cfg, finished: Date.now(), cancelled };
+  screenSave(); render();
+}
+function screenSorted() {
+  const sc = State.screen, st = State.screenSort || { key: 'verdict', dir: 1 };
+  const vf = State.screenVF || 'all', df = State.screenDir || 'All', q = (State.screenQ || '').trim().toLowerCase();
+  let rows = sc.rows.filter(r => (vf === 'all' || (vf === 'pass' && r.verdict === 'Passes') || (vf === 'passmarg' && (r.verdict === 'Passes' || r.verdict === 'Marginal'))) && (df === 'All' || r.dir === df) && (!q || (r.name + ' ' + r.symbol).toLowerCase().includes(q)));
+  const val = {
+    name: r => (r.name + r.symbol).toLowerCase(), trades: r => r.trades === undefined ? -1 : r.trades, win: r => r.winRate === undefined ? -1 : r.winRate, edge: r => r.edge === undefined ? -999 : r.edge,
+    ret: r => r.ret === undefined ? -9999 : r.ret, ret2: r => r.ret2 === undefined ? -9999 : r.ret2, oos: r => r.oosN >= 5 ? r.oosRet : -9999, dd: r => r.dd === undefined ? 999 : r.dd,
+    win3: r => r.thirds ? r.thirds.filter(x => x.r > 0).length : -1, verdict: r => r.rank * 100000 - (r.ret2 === undefined ? -9999 : r.ret2),
+  }[st.key] || (r => r.rank);
+  rows = rows.slice().sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * st.dir; });
+  return rows;
+}
+function screenSpark(r) {
+  if (!r.curve) return '';
+  const w = 70, h = 22, mn = Math.min(...r.curve), mx = Math.max(...r.curve), sp = (mx - mn) || 1;
+  const pts = r.curve.map((v, i) => `${(i / (r.curve.length - 1) * w).toFixed(1)},${(h - 2 - (v - mn) / sp * (h - 4)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;margin-top:3px;"><polyline points="${pts}" fill="none" stroke="${r.ret >= 0 ? 'var(--long)' : 'var(--short)'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+function screenCompare() {
+  const sel = (State.screenSel || []).map(k => State.screen.rows.find(r => r.key === k)).filter(r => r && r.curve);
+  if (sel.length < 2) return '';
+  const cols = ['#22d3ee', '#ff4fa3', '#fbbf24'], W = 760, H = 250, padL = 46, padB = 24;
+  const all = sel.reduce((a, r) => a.concat(r.curve), []), mn = Math.min(...all, 10000), mx = Math.max(...all, 10000), sp = (mx - mn) || 1;
+  const X = i => padL + i / 39 * (W - padL - 10), Y = v => 10 + (1 - (v - mn) / sp) * (H - padB - 14);
+  const grid = [0, 0.25, 0.5, 0.75, 1].map(f => { const v = mn + sp * f; return `<line x1="${padL}" x2="${W - 10}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="rgba(148,163,184,.18)"/><text x="${padL - 6}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#94a3b8">${((v - 10000) / 100).toFixed(0)}%</text>`; }).join('');
+  const lines = sel.map((r, i) => `<polyline points="${r.curve.map((v, k) => X(k).toFixed(1) + ',' + Y(v).toFixed(1)).join(' ')}" fill="none" stroke="${cols[i]}" stroke-width="2.6" stroke-linejoin="round"/>`).join('');
+  const zero = `<line x1="${padL}" x2="${W - 10}" y1="${Y(10000).toFixed(1)}" y2="${Y(10000).toFixed(1)}" stroke="rgba(255,255,255,.35)" stroke-dasharray="4 4"/>`;
+  const legend = sel.map((r, i) => `<div style="display:flex;gap:10px;align-items:flex-start;"><i style="width:12px;height:12px;border-radius:3px;background:${cols[i]};margin-top:3px;flex:none;"></i><div style="font-size:12.5px;line-height:1.5;"><b>${esc(r.name)}</b> <span class="faint">${esc(r.symbol)} · ${esc(r.tf)} · ${esc(r.dir)}</span><br><span class="mono">Return <b style="color:${plColor(r.ret)}">${fmtPct(r.ret)}</b> · Costs x2 <b style="color:${plColor(r.ret2)}">${fmtPct(r.ret2)}</b> · Max drawdown <b>${r.dd.toFixed(1)}%</b> · ${r.trades} trades</span></div></div>`).join('');
+  return `<div class="panel panel-pad" style="margin:0 0 14px;background:var(--panel-2,rgba(255,255,255,.03));">
+    <div class="panel-head"><h3>Compare equity curves</h3><button class="btn btn-ghost btn-sm" data-action="scr-clearsel">Clear selection</button></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;">${grid}${zero}${lines}<text x="${padL}" y="${H - 6}" font-size="11" fill="#94a3b8">start of tested history</text><text x="${W - 10}" y="${H - 6}" font-size="11" fill="#94a3b8" text-anchor="end">latest</text></svg>
+    <div style="display:grid;gap:10px;margin-top:10px;">${legend}</div>
+    <div class="faint" style="font-size:11.5px;margin-top:8px;">Each line starts at 0% on a $10,000 account and shows the account after every closed trade, placed by when in the history the trade closed. Past results do not predict future results.</div>
   </div>`;
+}
+function screenResultsInner() {
+  const sc = State.screen; if (!sc || sc.running) return '';
+  const rows = screenSorted(), st = State.screenSort || { key: 'verdict', dir: 1 }, sel = State.screenSel || [];
+  const vf = State.screenVF || 'all', df = State.screenDir || 'All';
+  const vcls = { Passes: 'badge-long', Marginal: 'badge-info', Fragile: 'badge-short', Weak: 'badge-dim', 'Fails recent 30%': 'badge-short', 'Too few trades': 'badge-dim', 'No data': 'badge-dim', 'Not testable': 'badge-dim' };
+  const cnt = (v) => sc.rows.filter(r => r.verdict === v).length;
+  const th = (key, label, left) => `<th style="${left ? 'text-align:left;' : 'text-align:right;'}padding:6px 8px 8px;cursor:pointer;white-space:nowrap;" data-action="scr-sort" data-key="${key}">${label}${st.key === key ? (st.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
+  const pill = (act, val, cur, label) => `<button type="button" class="asset-pill ${cur === val ? 'on' : ''}" data-action="${act}" data-val="${val}">${label}</button>`;
+  const dot = (x) => `<i title="${x.n ? x.n + ' trades, ' + fmtPct(x.r) : 'No trades in this period'}" style="display:inline-block;width:11px;height:11px;border-radius:3px;margin:0 1px;background:${!x.n ? 'rgba(148,163,184,.35)' : x.r > 0 ? 'var(--long)' : 'var(--short)'};"></i>`;
+  const body = rows.map(r => {
+    const on = sel.includes(r.key), noRes = r.trades === undefined;
+    return `<tr style="border-top:1px solid var(--border-soft);text-align:right;vertical-align:top;">
+      <td style="padding:10px 6px 10px 0;text-align:left;">${noRes ? '' : `<input type="checkbox" data-action="scr-sel" data-key="${esc(r.key)}" ${on ? 'checked' : ''} aria-label="Select to compare">`}</td>
+      <td style="text-align:left;padding:9px 8px;"><b>${esc(r.name)}</b><div class="faint" style="font-size:11px;">${esc(r.symbol)} · ${esc(r.tf)} · ${esc(r.dir)} · +${r.tp}% / -${r.sl}%${r.kind === 'mine' ? ' · <span style="color:var(--brand,#ff4fa3)">yours</span>' : ''}</div>${noRes ? '' : screenSpark(r)}</td>
+      ${noRes ? `<td colspan="8" class="faint" style="padding:9px 8px;text-align:left;font-size:12px;">${esc((r.reasons || [])[0] || '')}</td>` : `
+      <td class="mono" style="padding:9px 8px;">${r.trades}</td><td class="mono" style="padding:9px 8px;">${r.winRate.toFixed(0)}%<div class="faint" style="font-size:10.5px;">break-even ${r.be.toFixed(0)}%</div></td>
+      <td class="mono" style="padding:9px 8px;color:${plColor(r.edge)}">${r.edge >= 0 ? '+' : ''}${r.edge.toFixed(1)}</td>
+      <td class="mono" style="padding:9px 8px;color:${plColor(r.ret)}">${fmtPct(r.ret)}</td>
+      <td class="mono" style="padding:9px 8px;color:${plColor(r.ret2)}">${fmtPct(r.ret2)}</td>
+      <td style="padding:9px 8px;white-space:nowrap;">${r.thirds.map(dot).join('')}</td>
+      <td class="mono" style="padding:9px 8px;color:${r.oosN >= 5 ? plColor(r.oosRet) : 'var(--text-faint)'}">${r.oosN >= 5 ? fmtPct(r.oosRet) : 'N/A'}</td>
+      <td class="mono" style="padding:9px 8px;">${r.dd.toFixed(1)}%</td>`}
+      <td style="padding:9px 8px;text-align:left;min-width:170px;"><span class="badge ${vcls[r.verdict] || 'badge-dim'}">${esc(r.verdict)}</span><div class="faint" style="font-size:11px;line-height:1.45;margin-top:4px;">${esc((r.reasons || []).slice(0, 2).join(' '))}</div></td>
+      <td style="padding:9px 0 9px 8px;white-space:nowrap;text-align:right;">${r.verdict === 'No data' || r.verdict === 'Not testable' ? `<button class="btn btn-outline btn-sm" data-action="scr-open" data-key="${esc(r.key)}">Use</button>` : `<button class="btn btn-outline btn-sm" data-action="scr-backtest" data-key="${esc(r.key)}" title="Backtest on my settings: saves it to My Strategies and runs the full backtest">Backtest mine</button> <button class="btn btn-primary btn-sm" data-action="scr-demo" data-key="${esc(r.key)}" title="Start demo trading: saves it to My Strategies and opens the demo launcher">Start demo</button> <button class="btn btn-ghost btn-sm" data-action="scr-open" data-key="${esc(r.key)}" title="Use: open it in the strategy builder to edit">Use</button>`}</td></tr>`;
+  }).join('');
+  return `${screenCompare()}
+    <div class="filter-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:4px 0 12px;">
+      <div class="asset-pills">${pill('scr-vf', 'all', vf, `All (${sc.rows.length})`)}${pill('scr-vf', 'passmarg', vf, `Passes and marginal (${cnt('Passes') + cnt('Marginal')})`)}${pill('scr-vf', 'pass', vf, `Passes only (${cnt('Passes')})`)}</div>
+      <div class="asset-pills">${pill('scr-dir', 'All', df, 'Long and short')}${pill('scr-dir', 'long', df, 'Long')}${pill('scr-dir', 'short', df, 'Short')}</div>
+      <div class="search-box" style="max-width:240px;">${icon('search')}<input class="input" data-field="scr-search" placeholder="Filter results" value="${esc(State.screenQ || '')}"></div>
+      ${sel.length >= 2 ? '' : `<span class="faint" style="font-size:12px;">Tick 2 or 3 rows to compare their equity curves.</span>`}</div>
+    <div style="overflow:auto;max-height:640px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:1180px;">
+      <thead><tr class="faint" style="font-size:10.5px;position:sticky;top:0;background:var(--panel);z-index:1;"><th style="width:26px;"></th>${th('name', 'STRATEGY', true)}${th('trades', 'TRADES')}${th('win', 'WIN %')}${th('edge', 'EDGE')}${th('ret', 'RETURN')}${th('ret2', 'COSTS x2')}${th('win3', '3 PERIODS')}${th('oos', 'LAST 30%')}${th('dd', 'MAX DD')}${th('verdict', 'VERDICT', true)}<th></th></tr></thead>
+      <tbody>${body || `<tr><td colspan="12" class="faint" style="padding:24px;text-align:center;">No results match these filters.</td></tr>`}</tbody></table></div>`;
+}
+function screenPanelInner() {
+  screenRestore();
+  const sc = State.screen, cfg = screenCfg(), plan = screenPlan(cfg);
+  const pill = (act, val, cur, label) => `<button type="button" class="asset-pill ${cur === val ? 'on' : ''}" data-action="${act}" data-val="${val}">${label}</button>`;
+  const nTpl = tplFiltered().length, nMine = (State.user.strategies || []).length;
+  const syms = plan.syms;
+  const est = Math.max(3, Math.round(plan.runs.length * 0.05 + plan.pairs.length * 0.5));
+  const over = plan.runs.length > SCREEN_MAX_RUNS;
+  const running = !!(sc && sc.running);
+  const cfgBlock = `
+    <div class="pill-group-label">What to test</div>
+    <div class="asset-pills" style="margin-bottom:10px;">${pill('scr-source', 'templates', cfg.source, `Ready-made (${nTpl} shown)`)}${pill('scr-source', 'mine', cfg.source, `My strategies (${nMine})`)}${pill('scr-source', 'both', cfg.source, 'Both')}</div>
+    <div class="pill-group-label">Where to test it</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+      <select class="input" data-field="scr-set" style="max-width:290px;">${SCREEN_SETS.map(x => `<option value="${x.id}" ${cfg.set === x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
+      ${cfg.set === 'custom' ? `<input class="input" data-field="scr-custom" style="max-width:380px;" placeholder="e.g. AAPL, NVDA, EUR/USD, BTC/USD" value="${esc(cfg.custom || '')}">` : ''}
+    </div>
+    <div class="faint" style="font-size:12px;line-height:1.55;margin-bottom:12px;">${syms ? `Each strategy is tested on ${syms.length} symbols${syms.length ? ' (' + esc(syms.slice(0, 6).join(', ')) + (syms.length > 6 ? ', …' : '') + ')' : ''}, so you see where it works and where it does not.` : 'Each strategy is tested on its own symbol.'} The ready-made list follows the filters above; leave them on All to test everything.</div>`;
+  const runBtn = running ? `<button class="btn btn-outline btn-sm" data-action="scr-stop">Stop</button>` : `<button class="btn btn-primary btn-sm" data-action="scr-run" ${over || !plan.runs.length ? 'disabled' : ''}>${icon('compass')} ${sc && sc.rows && sc.rows.length ? 'Run again' : 'Run screener'}</button>`;
+  const head = `<div class="panel-head"><h3>${icon('compass')} Strategy screener</h3>${runBtn}</div>
+    <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 12px;">Backtests strategies on real price history with your fee and slippage settings, then checks that each one holds up: across three separate time periods, on the most recent 30%, with trading costs doubled, and without relying on a few lucky trades. It cannot prove a strategy will make money in the future.</p>`;
+  const plant = `<div style="font-size:12.5px;margin:0 0 4px;${over ? 'color:var(--short);' : ''}"><b>${plan.runs.length}</b> test${plan.runs.length === 1 ? '' : 's'} on <b>${plan.pairs.length}</b> price series${over ? ` is over the limit of ${SCREEN_MAX_RUNS}. Narrow the filters or the symbol list.` : `, about ${est} seconds.`}</div>`;
+  let mid = '';
+  if (running) mid = `<div style="margin:12px 0 4px;"><div id="scr-prog-t" class="muted" style="font-size:13px;margin-bottom:6px;">Starting…</div><div style="height:8px;border-radius:5px;background:rgba(148,163,184,.2);"><div id="scr-prog-b" style="height:100%;width:2%;border-radius:5px;background:var(--brand,#ff4fa3);transition:width .2s;"></div></div></div>`;
+  else if (sc && sc.rows && sc.rows.length) {
+    const pass = sc.rows.filter(r => r.verdict === 'Passes').length, nod = sc.rows.filter(r => r.verdict === 'No data').length, fresh = sc.finished ? new Date(sc.finished).toLocaleString() : '';
+    mid = `<div style="font-size:13px;margin:14px 0 2px;"><b>${pass}</b> of ${sc.rows.length} passed${nod ? ` · ${nod} had no real price history` : ''} · costs ${sc.rt.toFixed(2)}% per round trip (doubled for the stress test) · <span class="faint">${sc.cancelled ? 'stopped early, ' : ''}run ${esc(fresh)}${sc.restored ? ' (saved from your last visit)' : ''}</span></div>
+      <div class="faint" style="font-size:11.5px;margin-bottom:6px;">The more strategies and symbols you test, the more likely some look good by chance. Treat "Passes" as a shortlist to demo-trade, not as a promise.</div>
+      <div id="scr-results">${screenResultsInner()}</div>`;
+  }
+  return head + cfgBlock + plant + mid;
+}
+function renderTplScreenPanel() { return `<div id="scr-panel" class="panel panel-pad" style="margin-bottom:16px;">${screenPanelInner()}</div>`; }
+// Turns a result row into a saved strategy in My Strategies (re-using one that is already there).
+async function screenMaterialize(row) {
+  const list = State.user.strategies;
+  if (row.kind === 'mine') {
+    const s = list.find(x => x.id === row.ref); if (!s) { toast('That strategy no longer exists.', 'err'); return null; }
+    if (s.symbol === row.symbol) return s;
+    const dup = list.find(x => x.copiedFromId === 'screen:' + s.id && x.symbol === row.symbol); if (dup) return dup;
+    const c = JSON.parse(JSON.stringify(s, (k, v) => (k === 'backtest' || k === 'tradeLog' || k === '_exprCache') ? undefined : v));
+    Object.assign(c, { id: uid(), name: `${s.name} (${row.symbol})`, symbol: row.symbol, status: 'draft', createdAt: Date.now(), copiedFromId: 'screen:' + s.id });
+    list.push(c); logActivity('strategy', `Created "${c.name}" from the screener`);
+    if (!(await saveUser())) return null; track('strategy_created'); return c;
+  }
+  const t = TEMPLATES.find(x => x.name === row.ref); if (!t) { toast('That template is no longer available.', 'err'); return null; }
+  const nm = row.symbol === t.symbol ? t.name : `${row.symbol} ${screenIdeaName(t)}`;
+  const have = list.find(x => x.name === nm && x.symbol === row.symbol && x.timeframe === t.timeframe); if (have) return have;
+  const d = screenSpec({ kind: 'tpl', t, symbol: row.symbol });
+  d.entryConditions = d.entryConditions.map(c => Object.assign({ id: uid() }, c));
+  Object.assign(d, { id: uid(), name: nm, status: 'draft', createdAt: Date.now(), copiedFromId: 'template:' + t.name });
+  list.push(d); logActivity('strategy', `Created "${d.name}" from the screener`);
+  if (!(await saveUser())) return null; track('strategy_created'); return d;
 }
 
 function renderTemplates() {
-  const markets = ['All', 'US stocks', 'UK stocks', 'Forex', 'Crypto', 'Other'], fams = ['All', 'Day trading', 'Scalping (1M)', 'Trend', 'Mean reversion', 'Breakout', 'Momentum'];
+  const markets = ['All', 'US stocks', 'UK stocks', 'Forex', 'Crypto', 'Other'], fams = ['All', 'Day trading', 'Scalping', 'Trend', 'Mean reversion', 'Breakout', 'Momentum'];
   const m = State.tplMarket || 'All', f = State.tplFamily || 'All';
   const count = (mk) => TEMPLATES.filter(t => mk === 'All' || templateMarket(t) === mk).length;
   return `${tplHero()}<div class="panel panel-pad" style="margin-bottom:16px;">
@@ -8265,6 +8749,8 @@ function renderTemplates() {
   <div class="filter-row" style="margin:0 0 12px;"><div class="search-box">${icon('search')}<input class="input" placeholder="${T3('Search strategies or symbols…', 'ابحث عن استراتيجية أو رمز…')}" value="${esc(State.tplQuery || '')}" data-field="tpl-search"></div></div>
   <div class="pill-group-label">${T3('Market', 'السوق')}</div>
   <div class="asset-pills" style="margin-bottom:12px;">${markets.map(x => `<button type="button" class="asset-pill ${m === x ? 'on' : ''}" data-action="tpl-market" data-val="${x}">${x === 'All' ? T3('All', 'الكل') : esc(x)} (${count(x)})</button>`).join('')}</div>
+  <div class="pill-group-label">${T3('Direction', 'الاتجاه')}</div>
+  <div class="asset-pills" style="margin-bottom:12px;">${['All', 'long', 'short'].map(x => `<button type="button" class="asset-pill ${(State.tplDir || 'All') === x ? 'on' : ''}" data-action="tpl-dir" data-val="${x}">${x === 'All' ? T3('Long and short', 'شراء وبيع') : x === 'long' ? T3('Long only', 'شراء فقط') : T3('Short only', 'بيع فقط')} (${TEMPLATES.filter(t => x === 'All' || t.direction === x).length})</button>`).join('')}</div>
   <div class="pill-group-label">${T3('Style', 'النمط')}</div>
   <div class="asset-pills" style="margin-bottom:16px;">${fams.map(x => `<button type="button" class="asset-pill ${f === x ? 'on' : ''}" data-action="tpl-family" data-val="${x}">${x === 'All' ? T3('All', 'الكل') : esc(x)}</button>`).join('')}</div>
   ${renderTplScreenPanel()}
@@ -8525,18 +9011,31 @@ function cxAnatomy(s) {
   return `<div class="cx-anat"><span class="cx-chip dir"><i>${T3('Side', 'الاتجاه')}</i>${esc(s.direction || 'long')}</span>${conds}
     <span class="cx-chip tp"><i>TP</i>${esc(String(s.takeProfit))}%</span><span class="cx-chip sl"><i>SL</i>${esc(String(s.stopLoss))}%${s.trailingStop ? ' ' + T3('trailing', 'متحرك') : ''}</span><span class="cx-chip sz"><i>${T3('Size', 'الحجم')}</i>${esc(String(s.positionSizePct))}%</span></div>`;
 }
+function cxHow(lang) {
+  const pine = lang === 'pine';
+  const steps = pine
+    ? [T3('Click Copy (or Download) above.', 'اضغط نسخ أو تنزيل أعلاه.'), T3('In TradingView open the Pine Editor at the bottom of any chart.', 'في TradingView افتح محرر Pine أسفل أي رسم.'), T3('Paste, then click Add to chart.', 'الصق ثم اضغط إضافة إلى الرسم.'), T3('Open Strategy Tester to see trades and results.', 'افتح مختبر الاستراتيجيات لرؤية الصفقات.')]
+    : [T3('Click Download above to save the .mq5 file.', 'اضغط تنزيل لحفظ ملف mq5.'), T3('In MetaTrader 5 choose File, Open Data Folder, MQL5, Experts, and drop the file in.', 'ضع الملف في مجلد Experts.'), T3('Open MetaEditor, press F7 to compile.', 'افتح MetaEditor واضغط F7 للتجميع.'), T3('Run it in the Strategy Tester first, then on a demo account.', 'شغله في مختبر الاستراتيجيات ثم على حساب تجريبي.')];
+  return `<div class="cx-how">
+    <div><h4><i>1</i>${pine ? T3('Use it on TradingView', 'استخدمه في TradingView') : T3('Use it on MetaTrader 5', 'استخدمه في MetaTrader 5')}</h4><ol>${steps.map(x => `<li>${x}</li>`).join('')}</ol></div>
+    <div><h4><i>2</i>${T3('What is in the code', 'ما في الكود')}</h4><ol><li>${T3('Your indicators with their exact settings', 'مؤشراتك بإعداداتها')}</li><li>${T3('Your entry rules, joined with AND / OR as built', 'قواعد الدخول كما بنيتها')}</li><li>${T3('Take profit, stop loss and position size', 'جني الربح ووقف الخسارة والحجم')}</li><li>${T3('Long, short or both, as you chose', 'شراء أو بيع أو كلاهما')}</li></ol></div>
+    <div><h4><i>3</i>${T3('Before you rely on it', 'قبل الاعتماد عليه')}</h4><ol><li>${T3('Compare its results with VaticTrader\'s backtest; small differences are normal.', 'قارن نتائجه مع اختبار VaticTrader.')}</li><li>${T3('Fees, slippage and fills differ by platform.', 'الرسوم والانزلاق تختلف بين المنصات.')}</li><li>${T3('Paper trade before real money.', 'جرّب بحساب تجريبي أولاً.')}</li></ol></div>
+  </div>`;
+}
 function renderCodeExport(s) {
   const lang = State.codeLang || 'pine';
   const code = lang === 'pine' ? generatePineScript(s) : generateMQL5(s);
   const safe = String(s.name || 'strategy').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'strategy';
   return `
   <div class="panel panel-pad code-export cx-panel" style="margin-top:16px;">
-    <div class="panel-head"><h3>${icon('code')} ${T3('Export code', 'تصدير الكود')}</h3></div>
+    <div class="panel-head"><h3>${icon('code')} ${T3('Export code', 'تصدير الكود')}</h3>
+      <div class="cx-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="download-code" data-lang="${lang}">${icon('download')} ${T3('Download', 'تنزيل')} ${lang === 'pine' ? '.pine' : '.mq5'}</button></div></div>
     <div class="cx-flow" aria-hidden="true"><span class="cx-fn"><b>${T3('Your rules', 'قواعدك')}</b></span><svg viewBox="0 0 80 12" class="cx-arrow"><path d="M2 6h70M66 1l7 5-7 5"/></svg><span class="cx-fn gen"><b>${T3('Generator', 'المولّد')}</b></span><svg viewBox="0 0 80 12" class="cx-arrow"><path d="M2 6h70M66 1l7 5-7 5"/></svg><span class="cx-fn out"><b>${lang === 'pine' ? 'Pine v5' : 'MQL5'}</b></span></div>
     ${cxAnatomy(s)}
     ${cxPlatforms(lang, 'set-code-lang')}
-    <div class="hint" style="margin:10px 0;">${T3('Generated from this strategy\'s rules for', 'مولّد من قواعد هذه الاستراتيجية لمنصة')} ${lang === 'pine' ? 'TradingView' : 'MetaTrader 5'}, ${T3('a starting point to refine and test on the target platform, not drop-in production code.', 'نقطة بداية للتحسين والاختبار على المنصة، وليس كودًا جاهزًا للإنتاج.')}</div>
+    <div style="height:14px;"></div>
     ${cxWin(code, lang, safe + (lang === 'pine' ? '.pine' : '.mq5'), 'copy-code')}
+    ${cxHow(lang)}
   </div>`;
 }
 
@@ -8788,6 +9287,7 @@ function renderDeveloper() {
     State.codeExportStrategyId = strategies.length ? strategies[0].id : null;
   }
   const selected = strategies.find(s => s.id === State.codeExportStrategyId);
+  const dirBadge = d => `<span class="cx-badge ${esc(d || 'long')}">${esc(d === 'both' ? T3('long + short', 'شراء وبيع') : (d || 'long'))}</span>`;
   return `
   <section class="panel panel-pad cx-hero">
     <div class="cx-hero-art" aria-hidden="true"><svg viewBox="0 0 360 120"><defs><linearGradient id="cxg" x1="0" x2="1"><stop offset="0" stop-color="#2ED9A8"/><stop offset="1" stop-color="#5B8DEF"/></linearGradient></defs>
@@ -8797,26 +9297,31 @@ function renderDeveloper() {
       <path d="M216 60h40" class="cx-fl"/><path d="M250 52l10 8-10 8" class="cx-fa"/>
       <rect x="266" y="14" width="88" height="40" rx="8" class="cx-b p"/><text x="310" y="38" text-anchor="middle" class="cx-t">Pine v5</text>
       <rect x="266" y="66" width="88" height="40" rx="8" class="cx-b m"/><text x="310" y="90" text-anchor="middle" class="cx-t">MQL5</text></svg></div>
-    <div class="cx-hero-tx"><h3>${T3('From your rules to runnable code', 'من قواعدك إلى كود قابل للتشغيل')}</h3><p class="muted">${T3('Pick a strategy and choose a platform. The code is written from that strategy\'s actual entry rules, take profit, stop loss and size.', 'اختر استراتيجية ومنصة. يُكتب الكود من قواعد الدخول وجني الربح ووقف الخسارة والحجم الفعلية.')}</p></div>
+    <div class="cx-hero-tx"><h3>${T3('From your rules to runnable code', 'من قواعدك إلى كود قابل للتشغيل')}</h3><p class="muted">${T3('Pick a strategy, choose TradingView or MetaTrader 5, then copy or download code written from that strategy\'s real entry rules, take profit, stop loss and size.', 'اختر استراتيجية ومنصة ثم انسخ أو نزّل الكود المكتوب من قواعدها الفعلية.')}</p></div>
   </section>
-  <div class="panel panel-pad" style="margin-bottom:20px;">
-    <div class="panel-head"><h3>${icon('code')} Export one of your strategies</h3></div>
+  <div class="cx-steps">
+    <div class="cx-step"><span class="n">1</span><div><b>${T3('Pick a strategy', 'اختر استراتيجية')}</b><span>${T3('Any strategy from My strategies.', 'أي استراتيجية من استراتيجياتي.')}</span></div></div>
+    <div class="cx-step"><span class="n">2</span><div><b>${T3('Choose a platform', 'اختر المنصة')}</b><span>${T3('TradingView (Pine v5) or MetaTrader 5 (MQL5).', 'TradingView أو MetaTrader 5.')}</span></div></div>
+    <div class="cx-step"><span class="n">3</span><div><b>${T3('Copy or download', 'انسخ أو نزّل')}</b><span>${T3('Paste it in, add to chart, and test.', 'الصقه وجرّبه.')}</span></div></div>
+  </div>
+  <div class="panel panel-pad" style="margin-bottom:4px;">
+    <div class="panel-head"><h3>${icon('code')} ${T3('1. Your strategy', '1. استراتيجيتك')}</h3></div>
     ${strategies.length ? `
-    <p class="muted" style="font-size:13px;margin-bottom:12px;">Pick a strategy below to generate real, copy-ready code from its actual rules, not a generic template.</p>
-    <select class="input" data-field="code-export-strategy" style="max-width:440px;">
-      ${strategies.map(s => `<option value="${esc(s.id)}" ${s.id === State.codeExportStrategyId ? 'selected' : ''}>${esc(s.name)} (${esc(s.symbol)} · ${esc(s.timeframe)})</option>`).join('')}
-    </select>` : `
-    <p class="muted" style="font-size:13px;margin-bottom:12px;">You haven't built any strategies yet. Build one first, then come back here to export real code for it.</p>
-    <button type="button" class="btn btn-primary btn-sm" data-action="new-strategy">${icon('plus')} New strategy</button>`}
+    <div class="cx-pick">
+      <select class="input" data-field="code-export-strategy" aria-label="${T3('Strategy to export', 'الاستراتيجية')}">
+        ${strategies.map(x => `<option value="${esc(x.id)}" ${x.id === State.codeExportStrategyId ? 'selected' : ''}>${esc(x.name)} (${esc(x.symbol)} · ${esc(x.timeframe)})</option>`).join('')}
+      </select>
+      ${selected ? `<div class="cx-sum">${dirBadge(selected.direction)}<span class="cx-badge">${esc(selected.symbol)}</span><span class="cx-badge">${esc(selected.timeframe)}</span><span class="cx-badge">${(selected.entryConditions || []).length} ${T3('entry rules', 'قواعد دخول')}</span></div>` : ''}
+    </div>` : `
+    <p class="muted" style="font-size:13px;margin-bottom:12px;">${T3('You have not built any strategies yet. Build one, or save one from Ready-made strategies, then come back to export real code for it.', 'لم تنشئ استراتيجيات بعد.')}</p>
+    <button type="button" class="btn btn-primary btn-sm" data-action="new-strategy">${icon('plus')} ${T3('New strategy', 'استراتيجية جديدة')}</button>`}
   </div>
   ${selected ? renderCodeExport(selected) : ''}
-  <div class="panel-head" style="margin-top:28px;"><h3>Reference example, Golden Cross Trend Follower</h3></div>
-  <p class="muted" style="font-size:12.5px;margin:-4px 0 14px;">Not tied to your account, a hand-written pattern showing what the generator above follows.</p>
-  <div class="panel panel-pad code-export cx-panel">
-    <h3 style="font-size:13px;color:var(--text-dim);font-weight:600;margin-bottom:12px;">50/200 SMA cross, RSI-filtered, with an early exit on death cross</h3>
-    ${cxPlatforms(lang, 'set-dev-lang')}
-    <div style="height:12px;"></div>
-    ${cxWin(code, lang, 'golden_cross' + (lang === 'pine' ? '.pine' : '.mq5'), 'copy-raw-code')}
+  <div class="panel panel-pad" style="margin-top:22px;">
+    <div class="panel-head"><h3>${T3('Reference example: Golden Cross Trend Follower', 'مثال مرجعي')}</h3>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="dev-ref-toggle">${State.devRefOpen ? T3('Hide', 'إخفاء') : T3('Show example', 'عرض المثال')}</button></div>
+    <p class="muted" style="font-size:12.5px;margin:0;">${T3('A hand-written pattern, not tied to your account: 50/200 SMA cross, RSI-filtered, with an early exit on a death cross.', 'نمط مكتوب يدوياً غير مرتبط بحسابك.')}</p>
+    ${State.devRefOpen ? `<div style="height:14px;"></div>${cxPlatforms(lang, 'set-dev-lang')}<div style="height:12px;"></div>${cxWin(code, lang, 'golden_cross' + (lang === 'pine' ? '.pine' : '.mq5'), 'copy-raw-code')}` : ''}
   </div>
   `;
 }
@@ -10812,7 +11317,43 @@ function onDelegatedClick(e) {
       saveUser(); render(); toast('Strategy duplicated.', 'ok');
       break;
     }
-    case 'tpl-screen-run': tplScreenRun(); break;
+    case 'tpl-screen-run': case 'scr-run': screenRun(); break;
+    case 'scr-stop': if (State.screen) State.screen.cancel = true; break;
+    case 'scr-source': screenCfg().source = el.getAttribute('data-val') || 'templates'; screenPaint(); break;
+    case 'scr-sort': { const k = el.getAttribute('data-key'), cur = State.screenSort || { key: 'verdict', dir: 1 }; State.screenSort = { key: k, dir: cur.key === k ? -cur.dir : (k === 'name' || k === 'verdict' || k === 'dd' ? 1 : -1) }; const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner(); break; }
+    case 'scr-vf': State.screenVF = el.getAttribute('data-val') || 'all'; { const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner(); } break;
+    case 'scr-dir': State.screenDir = el.getAttribute('data-val') || 'All'; { const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner(); } break;
+    case 'scr-sel': {
+      const k = el.getAttribute('data-key'); State.screenSel = State.screenSel || [];
+      const i = State.screenSel.indexOf(k);
+      if (i > -1) State.screenSel.splice(i, 1);
+      else if (State.screenSel.length >= 3) { toast('Compare up to 3 at a time. Untick one first.', 'info'); }
+      else State.screenSel.push(k);
+      const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner();
+      break;
+    }
+    case 'scr-clearsel': State.screenSel = []; { const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner(); } break;
+    case 'scr-open': case 'scr-backtest': case 'scr-demo': {
+      const row = State.screen && State.screen.rows.find(x => x.key === el.getAttribute('data-key')); if (!row) break;
+      if (action === 'scr-open' && row.kind === 'tpl') {
+        const t = TEMPLATES.find(x => x.name === row.ref); if (!t) break;
+        const d = screenSpec({ kind: 'tpl', t, symbol: row.symbol });
+        d.entryConditions = d.entryConditions.map(c => Object.assign({ id: uid() }, c));
+        d.name = row.symbol === t.symbol ? t.name : `${row.symbol} ${screenIdeaName(t)}`; d.copiedFromId = 'template:' + t.name;
+        State.draft = d; State.editingId = null; State.view = 'builder'; render(); toast('Loaded in the builder. Tweak it, then save.', 'ok'); break;
+      }
+      screenMaterialize(row).then(async (st) => {
+        if (!st) return;
+        if (action === 'scr-open') { State.detailId = st.id; State.view = 'detail'; window.scrollTo(0, 0); render(); return; }
+        toast('Loading real market data…', 'info');
+        await loadRealBars(st.symbol, st.timeframe);
+        if (!applyBacktest(st, st.id)) { toast(st.backtestError || 'No real price history is available for this instrument.', 'err'); return; }
+        await saveUser();
+        if (action === 'scr-backtest') { State.detailId = st.id; State.view = 'detail'; window.scrollTo(0, 0); render(); loadLiveTradeLog(st.id); toast('Saved to My Strategies with a full backtest.', 'ok'); return; }
+        State.view = 'strategies'; State.modal = { type: 'golive', stratId: st.id, mode: 'demo', brokerId: null, ack: false, repeat: false, maxLosses: '' }; render();
+      });
+      break;
+    }
     case 'use-template': {
       const tpl = TEMPLATES[parseInt(el.getAttribute('data-idx'), 10)];
       if (!tpl) break;
@@ -10884,6 +11425,23 @@ function onDelegatedClick(e) {
     case 'copy-referral': copyToClipboard(el.getAttribute('data-link')); break;
     case 'set-code-lang': State.codeLang = el.getAttribute('data-lang'); render(); break;
     case 'set-dev-lang': State.devExampleLang = el.getAttribute('data-lang'); render(); break;
+    case 'dev-ref-toggle': State.devRefOpen = !State.devRefOpen; render(); break;
+    case 'download-code': {
+      const st = State.view === 'builder' ? State.draft
+        : State.view === 'developer' ? (State.user.strategies || []).find(x => x.id === State.codeExportStrategyId)
+        : detailStrategy();
+      if (!st) break;
+      const lg = el.getAttribute('data-lang');
+      const txt = lg === 'pine' ? generatePineScript(st) : generateMQL5(st);
+      const fn = (String(st.name || 'strategy').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'strategy') + (lg === 'pine' ? '.pine' : '.mq5');
+      try {
+        const url = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' }));
+        const aEl = document.createElement('a'); aEl.href = url; aEl.download = fn; document.body.appendChild(aEl); aEl.click(); aEl.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        toast(T3('Downloaded ', 'تم التنزيل ') + fn);
+      } catch (e) { copyToClipboard(txt); }
+      break;
+    }
     case 'copy-raw-code': {
       const lang = el.getAttribute('data-lang');
       copyToClipboard(lang === 'pine' ? EXAMPLE_PINE : EXAMPLE_MQL5);
@@ -11409,6 +11967,8 @@ function onDelegatedChange(e) {
   if (field && v3Change(t, field)) return;
   if (field === 'strat-status-filter') { State.stratStatus = t.value; updateStrategyResults(); return; }
   if (field === 'code-export-strategy') { State.codeExportStrategyId = t.value; render(); return; }
+  if (field === 'scr-set') { screenCfg().set = t.value; screenPaint(); return; }
+  if (field === 'scr-custom') { screenCfg().custom = t.value; screenPaint(); return; }
   if (field === 'v7-email-on') { v3SaveSettings({ notify: { emailEnabled: t.checked } }, T3('Email setting saved.', 'تم حفظ إعداد البريد.')); return; }
   if (field === 'fw-sort') { State.followSort = t.value; render(); return; }
   if (field === 'strat-sort') { State.stratSort = t.value; updateStrategyResults(); return; }
@@ -12276,7 +12836,27 @@ function v3JournalFiltered() {
   const f = V3.journalFilter;
   if (f === 'open') t = t.filter(x => x.status === 'open'); else if (f === 'closed') t = t.filter(x => x.status === 'closed');
   else if (f === 'wins') t = t.filter(x => x.pl !== null && x.pl > 0); else if (f === 'losses') t = t.filter(x => x.pl !== null && x.pl < 0);
-  return t;
+  if (V3.jrSide === 'long') t = t.filter(x => x.side === 'buy'); else if (V3.jrSide === 'short') t = t.filter(x => x.side === 'sell');
+  const rg = V3.jrRange || 'all';
+  if (rg !== 'all') { const cut = Date.now() - parseInt(rg, 10) * 864e5; t = t.filter(x => new Date(x.openedAt).getTime() >= cut); }
+  const q = (V3.jrQ || '').trim().toLowerCase();
+  if (q) t = t.filter(x => (x.symbol || '').toLowerCase().includes(q) || (x.strategyName || '').toLowerCase().includes(q));
+  const sk = V3.jrSort || { k: 'openedAt', dir: -1 };
+  const val = x => sk.k === 'openedAt' || sk.k === 'closedAt' ? (x[sk.k] ? new Date(x[sk.k]).getTime() : null) : sk.k === 'symbol' || sk.k === 'strategyName' || sk.k === 'side' ? String(x[sk.k] || '') : (x[sk.k] === null || x[sk.k] === undefined ? null : Number(x[sk.k]));
+  return t.slice().sort((a, b) => { const A = val(a), B = val(b); if (A === null && B === null) return 0; if (A === null) return 1; if (B === null) return -1; return (A < B ? -1 : A > B ? 1 : 0) * sk.dir; });
+}
+function v3TradeDetail(t) {
+  const long = t.side === 'buy'; const dec = priceDecimals(t.symbol); const snap = t.snapshot;
+
+    const conds = snap && snap.conditions ? snap.conditions.map((c, i) => `<div class="sc-cond"><span style="color:${c.passed ? 'var(--long)' : 'var(--short)'};flex-shrink:0;margin-top:1px;">${icon(c.passed ? 'check' : 'x')}</span><div style="min-width:0;flex:1;"><b style="font-size:12.5px;">${i > 0 ? `<span class="faint" style="font-weight:600;">${esc(c.logic)}</span> ` : ''}${esc(indicatorLabel(c.indicator))} <span class="faint">${esc(c.operator)}${c.value && c.indicator !== 'custom_equation' ? ' ' + esc(c.value) : ''}</span></b><div class="mono" style="font-size:12px;margin-top:2px;">${esc(c.label)}</div></div></div>`).join('') : '';
+    return `<div class="v3-trade-body">
+      ${snap ? `<div class="faint" style="font-size:11px;letter-spacing:.05em;margin-bottom:6px;">${T3('WHY IT ENTERED', 'لماذا دخلت')}</div>${conds}
+        <div class="chart-wrap" style="height:170px;margin-top:10px;"><canvas data-v3mini="${t.id}" style="width:100%;height:100%;"></canvas></div>
+        <div class="faint" style="font-size:11.5px;margin-top:6px;">${T3('Entry', 'الدخول')} ${snap.price.toFixed(dec)} · ${T3('take profit', 'جني الربح')} ${snap.takeProfitPrice.toFixed(dec)} · ${T3('stop', 'الوقف')} ${snap.stopLossPrice.toFixed(dec)}${snap.riskReduced ? ' · ' + T3('size reduced by your risk limits', 'خُفِّض الحجم بسبب حدود المخاطر') : ''}</div>`
+        : `<p class="muted" style="font-size:12.5px;margin:0;">${T3('No entry snapshot was recorded for this trade. Snapshots are saved for trades opened after the journal was added.', 'لم تُسجَّل لقطة دخول لهذه الصفقة. تُحفظ اللقطات للصفقات المفتوحة بعد إضافة السجل.')}</p>`}
+      <div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" data-action="view-strategy" data-id="${esc(t.strategyId)}">${icon('strategy')} ${T3('Open strategy', 'فتح الاستراتيجية')}</button></div>
+    </div>`;
+  
 }
 function v3TradeCard(t) {
   const open = V3.openTrade === t.id; const long = t.side === 'buy';
@@ -12362,24 +12942,85 @@ function v8JournalViz(all) {
     <div class="faint" style="font-size:11.5px;margin-top:10px;">${T3('Computed from your real trade log only (latest 150 trades). Past results do not predict future results.', 'محسوب من سجل صفقاتك الحقيقية فقط (آخر 150 صفقة). الأداء السابق لا يضمن المستقبل.')}</div>
   </section>`;
 }
+function v3JrStats(list) {
+  const closed = list.filter(t => t.status === 'closed' && t.pl !== null);
+  const wins = closed.filter(t => t.pl > 0), losses = closed.filter(t => t.pl < 0);
+  const net = closed.reduce((a, t) => a + t.pl, 0), gw = wins.reduce((a, t) => a + t.pl, 0), gl = Math.abs(losses.reduce((a, t) => a + t.pl, 0));
+  return { n: list.length, closed: closed.length, open: list.filter(t => t.status === 'open').length, wins: wins.length, losses: losses.length, net, wr: closed.length ? 100 * wins.length / closed.length : null, pf: gl > 0 ? gw / gl : null, avg: closed.length ? net / closed.length : null, best: closed.length ? Math.max(...closed.map(t => t.pl)) : null, worst: closed.length ? Math.min(...closed.map(t => t.pl)) : null };
+}
+function jrTs(v) {
+  if (!v) return '<span class="faint">N/A</span>'; const d = new Date(v); if (!isFinite(d)) return '<span class="faint">N/A</span>';
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], z = n => (n < 10 ? '0' : '') + n, y = d.getFullYear() !== new Date().getFullYear();
+  return `<span title="${esc(String(fmtTs(v)).replace(/<[^>]+>/g, ''))}">${z(d.getDate())} ${MON[d.getMonth()]}${y ? ' ' + d.getFullYear() : ''}, ${z(d.getHours())}:${z(d.getMinutes())}</span>`;
+}
+function v3JrRows(list) {
+  return list.map(t => {
+    const dec = priceDecimals(t.symbol), open = t.status === 'open', isOpen = V3.openTrade === t.id;
+    const cls = open ? 'o' : t.pl > 0 ? 'w' : t.pl < 0 ? 'x' : '';
+    const row = `<tr class="jrr ${cls} ${isOpen ? 'open' : ''}" data-action="v3-toggle-trade" data-id="${t.id}">
+      <td class="l mono faint">${jrTs(t.openedAt)}</td>
+      <td class="l mono faint">${t.closedAt ? jrTs(t.closedAt) : `<span class="faint">${T3('Still open', 'ما زالت مفتوحة')}</span>`}</td>
+      <td class="l"><b>${esc(t.symbol)}</b></td>
+      <td class="l"><span class="badge ${t.side === 'sell' ? 'badge-short' : 'badge-long'}">${t.side === 'sell' ? T3('SHORT', 'بيع') : T3('LONG', 'شراء')}</span></td>
+      <td class="l" style="max-width:190px;overflow:hidden;text-overflow:ellipsis;" title="${esc(t.strategyName || t.strategyId)}">${esc(t.strategyName || t.strategyId)}</td>
+      <td class="mono">${t.qty}</td><td class="mono">${Number(t.entryPrice).toFixed(dec)}</td>
+      <td class="mono">${t.exitPrice !== null && t.exitPrice !== undefined ? Number(t.exitPrice).toFixed(dec) : '<span class="faint">N/A</span>'}</td>
+      <td class="mono" style="color:${v3PlColor(t.pl)}">${t.pl === null || t.pl === undefined ? '<span class="faint">N/A</span>' : v3Money(t.pl, true)}</td>
+      <td class="mono" style="color:${v3PlColor(t.plPct)}">${t.plPct === null || t.plPct === undefined ? '<span class="faint">N/A</span>' : fmtPct(t.plPct)}</td>
+      <td>${open ? `<span class="badge badge-long"><span class="dot"></span>${T3('Open', 'مفتوحة')}</span>` : `<span class="badge badge-dim">${T3('Closed', 'مغلقة')}</span>`}</td></tr>`;
+    return row + (isOpen ? `<tr class="det"><td colspan="11"><div class="jr-det">${v3TradeDetail(t)}</div></td></tr>` : '');
+  }).join('');
+}
 function v3JournalView() {
   const j = V3.journal;
   if (j === null) return `<div>${v3Skeleton(5)}</div>`;
   if (j.unavailable) return `<div class="panel panel-pad"><div class="empty-state" style="padding:30px;">${icon('book')}<p>${T3('The journal needs the VaticTrader backend, which is not reachable here.', 'يحتاج السجل إلى خادم فاتيك تريدر وهو غير متاح هنا.')}</p></div></div>`;
-  const all = j.trades, list = v3JournalFiltered();
-  const closed = all.filter(t => t.status === 'closed' && t.pl !== null);
-  const net = closed.reduce((a, t) => a + t.pl, 0), wins = closed.filter(t => t.pl > 0).length;
+  const all = j.trades, tab = V3.jrTab || 'overview';
   const strategies = [...new Map(all.map(t => [t.strategyId, t.strategyName || t.strategyId])).entries()];
-  const chips = [['all', T3('All', 'الكل')], ['open', T3('Open', 'مفتوحة')], ['closed', T3('Closed', 'مغلقة')], ['wins', T3('Wins', 'رابحة')], ['losses', T3('Losses', 'خاسرة')]];
-  return `${v8JournalViz(all)}
-    <div class="v3-filters">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">${chips.map(([k, l]) => `<button class="asset-pill ${V3.journalFilter === k ? 'on' : ''}" data-action="v3-journal-filter" data-f="${k}">${l}</button>`).join('')}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <select class="input" data-field="v3-journal-strategy" style="min-width:170px;"><option value="">${T3('All strategies', 'كل الاستراتيجيات')}</option>${strategies.map(([id, n]) => `<option value="${esc(id)}" ${V3.journalStrategy === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-        <button class="btn btn-outline btn-sm" data-action="v3-export-csv" data-year="all">${icon('copy')} ${T3('Export CSV', 'تصدير CSV')}</button>
-      </div>
+  const tabs = [['overview', T3('Overview', 'نظرة عامة'), ''], ['trades', T3('Trades', 'الصفقات'), all.length], ['strategies', T3('By strategy', 'حسب الاستراتيجية'), strategies.length]];
+  const bar = `<div class="jr-tabs" role="tablist">${tabs.map(([k, l, n]) => `<button class="jr-tab ${tab === k ? 'on' : ''}" role="tab" aria-selected="${tab === k}" data-action="jr-tab" data-t="${k}">${l}${n !== '' ? `<small>${n}</small>` : ''}</button>`).join('')}</div>`;
+  if (!all.length) return bar + `<div class="panel panel-pad"><div class="empty-state" style="padding:36px 20px;">${icon('book')}<p>${T3('No real trades yet. When a live strategy places an order, it appears here with the reason it entered.', 'لا صفقات حقيقية بعد. عندما تضع استراتيجية حية أمراً يظهر هنا مع سبب الدخول.')}</p></div></div>`;
+  if (tab === 'overview') {
+    const openT = all.filter(t => t.status === 'open');
+    const recent = all.filter(t => t.status === 'closed').slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt)).slice(0, 8);
+    const mini = t => `<div class="jr-mini" data-action="jr-goto" data-id="${t.id}"><span class="v3-side ${t.side === 'buy' ? 'long' : 'short'}">${t.side === 'buy' ? T3('BUY', 'شراء') : T3('SHORT', 'بيع')}</span><div class="m"><div><b>${esc(t.symbol)}</b> <span class="faint">${esc(t.strategyName || '')}</span></div><div class="faint mono" style="font-size:11px;">${fmtTs(t.closedAt || t.openedAt)}</div></div>${t.pl === null ? `<span class="badge badge-long">${T3('OPEN', 'مفتوحة')}</span>` : `<b class="mono" style="color:${v3PlColor(t.pl)}">${v3Money(t.pl, true)}</b>`}</div>`;
+    return bar + v8JournalViz(all) + `<div class="jr-two">
+      <div class="panel panel-pad"><div class="panel-head"><h3>${T3('Open positions', 'المراكز المفتوحة')}</h3><span class="badge badge-dim">${openT.length}</span></div>${openT.length ? openT.map(mini).join('') : `<p class="muted" style="font-size:13px;margin:0;">${T3('Nothing open right now.', 'لا مراكز مفتوحة الآن.')}</p>`}</div>
+      <div class="panel panel-pad"><div class="panel-head"><h3>${T3('Latest closed trades', 'آخر الصفقات المغلقة')}</h3><button class="btn btn-ghost btn-sm" data-action="jr-tab" data-t="trades">${T3('See all', 'عرض الكل')}</button></div>${recent.map(mini).join('')}</div>
+    </div>`;
+  }
+  if (tab === 'strategies') {
+    const rows = strategies.map(([id, name]) => { const l = all.filter(t => t.strategyId === id), st = v3JrStats(l); return { id, name, st }; }).sort((a, b) => b.st.net - a.st.net);
+    return bar + `<div class="panel panel-pad"><div class="panel-head"><h3>${T3('Results by strategy', 'النتائج حسب الاستراتيجية')}</h3><span class="faint" style="font-size:11.5px;">${T3('Real closed trades only', 'الصفقات المغلقة الحقيقية فقط')}</span></div>
+      <div style="overflow:auto;"><table class="jr-tbl" style="min-width:760px;"><thead><tr><th class="l" style="cursor:default;">${T3('STRATEGY', 'الاستراتيجية')}</th><th style="cursor:default;">${T3('TRADES', 'الصفقات')}</th><th style="cursor:default;">${T3('OPEN', 'مفتوحة')}</th><th style="cursor:default;">${T3('WIN RATE', 'نسبة الربح')}</th><th style="cursor:default;">${T3('PROFIT FACTOR', 'معامل الربح')}</th><th style="cursor:default;">${T3('AVG / TRADE', 'متوسط')}</th><th style="cursor:default;">${T3('BEST', 'الأفضل')}</th><th style="cursor:default;">${T3('WORST', 'الأسوأ')}</th><th style="cursor:default;">${T3('NET P&L', 'صافي الربح')}</th><th style="cursor:default;"></th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="l"><b>${esc(r.name)}</b></td><td class="mono">${r.st.n}</td><td class="mono">${r.st.open}</td><td class="mono">${r.st.wr === null ? 'n/a' : r.st.wr.toFixed(0) + '%'}</td><td class="mono">${r.st.pf === null ? 'n/a' : r.st.pf.toFixed(2)}</td><td class="mono" style="color:${v3PlColor(r.st.avg)}">${r.st.avg === null ? 'n/a' : v3Money(r.st.avg, true)}</td><td class="mono" style="color:var(--long)">${r.st.best === null ? 'n/a' : v3Money(r.st.best, true)}</td><td class="mono" style="color:var(--short)">${r.st.worst === null ? 'n/a' : v3Money(r.st.worst, true)}</td><td class="mono"><b style="color:${v3PlColor(r.st.net)}">${r.st.closed ? v3Money(r.st.net, true) : 'n/a'}</b></td><td><button class="btn btn-outline btn-sm" data-action="v3-journal-for" data-id="${esc(r.id)}">${T3('View trades', 'عرض الصفقات')}</button></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  }
+  // trades tab
+  const list = v3JournalFiltered(), per = 25, pages = Math.max(1, Math.ceil(list.length / per)); V3.jrPage = Math.min(Math.max(1, V3.jrPage || 1), pages);
+  const shown = list.slice((V3.jrPage - 1) * per, V3.jrPage * per), sk = V3.jrSort || { k: 'openedAt', dir: -1 }, st = v3JrStats(list);
+  const chip = (cur, k, l, act) => `<button class="asset-pill ${cur === k ? 'on' : ''}" data-action="${act}" data-f="${k}">${l}</button>`;
+  const th = (k, l, left) => `<th class="${left ? 'l' : ''} ${sk.k === k ? 'on' : ''}" data-action="jr-sort" data-k="${k}">${l}${sk.k === k ? (sk.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+  return bar + `<div class="panel panel-pad">
+    <div class="jr-bar">
+      <div class="grp">${[['all', T3('All', 'الكل')], ['open', T3('Open', 'مفتوحة')], ['closed', T3('Closed', 'مغلقة')], ['wins', T3('Wins', 'رابحة')], ['losses', T3('Losses', 'خاسرة')]].map(([k, l]) => chip(V3.journalFilter || 'all', k, l, 'v3-journal-filter')).join('')}</div>
+      <span class="sep"></span>
+      <div class="grp">${[['', T3('Both sides', 'الاتجاهان')], ['long', T3('Long', 'شراء')], ['short', T3('Short', 'بيع')]].map(([k, l]) => `<button class="asset-pill ${(V3.jrSide || '') === k ? 'on' : ''}" data-action="jr-side" data-f="${k}">${l}</button>`).join('')}</div>
+      <span class="sep"></span>
+      <div class="grp">${[['7', '7d'], ['30', '30d'], ['90', '90d'], ['all', T3('All time', 'كل الفترة')]].map(([k, l]) => `<button class="asset-pill ${(V3.jrRange || 'all') === k ? 'on' : ''}" data-action="jr-range" data-f="${k}">${l}</button>`).join('')}</div>
     </div>
-    ${list.length ? list.map(v3TradeCard).join('') : `<div class="panel panel-pad"><div class="empty-state" style="padding:36px 20px;">${icon('book')}<p>${all.length ? T3('No trades match this filter.', 'لا صفقات تطابق هذا الفلتر.') : T3('No real trades yet. When a live strategy places an order, it appears here with the reason it entered.', 'لا صفقات حقيقية بعد. عندما تضع استراتيجية حية أمرًا يظهر هنا مع سبب الدخول.')}</p></div></div>`}`;
+    <div class="jr-bar">
+      <input class="input jr-search" data-field="jr-search" placeholder="${T3('Search symbol or strategy', 'ابحث عن رمز أو استراتيجية')}" value="${esc(V3.jrQ || '')}">
+      <select class="input" data-field="v3-journal-strategy" style="min-width:170px;"><option value="">${T3('All strategies', 'كل الاستراتيجيات')}</option>${strategies.map(([id, n]) => `<option value="${esc(id)}" ${V3.journalStrategy === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <span style="flex:1"></span>
+      <span class="faint mono" style="font-size:11.5px;">${list.length} ${T3('trades', 'صفقة')} · ${st.closed ? v3Money(st.net, true) : 'n/a'}${st.wr !== null ? ' · ' + st.wr.toFixed(0) + '% ' + T3('won', 'ربح') : ''}</span>
+      <button class="btn btn-outline btn-sm" data-action="v3-export-csv" data-year="all">${icon('download')} ${T3('Export CSV', 'تصدير CSV')}</button>
+    </div>
+    ${shown.length ? `<div style="overflow:auto;"><table class="jr-tbl"><thead><tr>${th('openedAt', T3('OPENED', 'الفتح'), 1)}${th('closedAt', T3('CLOSED', 'الإغلاق'), 1)}${th('symbol', T3('SYMBOL', 'الرمز'), 1)}${th('side', T3('SIDE', 'الاتجاه'), 1)}${th('strategyName', T3('STRATEGY', 'الاستراتيجية'), 1)}${th('qty', T3('QTY', 'الكمية'))}${th('entryPrice', T3('ENTRY', 'الدخول'))}${th('exitPrice', T3('EXIT', 'الخروج'))}${th('pl', T3('P&L', 'الربح'))}${th('plPct', '%')}<th style="cursor:default;">${T3('STATUS', 'الحالة')}</th></tr></thead><tbody>${v3JrRows(shown)}</tbody></table></div>
+    <div class="jr-pg"><span>${T3('Click a row to see why it entered. Times are in ', 'انقر على صف لمعرفة سبب الدخول. الأوقات بتوقيت ')}${esc(tzNote())}.</span>
+      <span class="grp"><button class="btn btn-ghost btn-sm" data-action="jr-page" data-d="-1" ${V3.jrPage <= 1 ? 'disabled' : ''}>${T3('Previous', 'السابق')}</button><span class="mono">${V3.jrPage} / ${pages}</span><button class="btn btn-ghost btn-sm" data-action="jr-page" data-d="1" ${V3.jrPage >= pages ? 'disabled' : ''}>${T3('Next', 'التالي')}</button></span></div>`
+    : `<div class="empty-state" style="padding:36px 20px;">${icon('book')}<p>${T3('No trades match these filters.', 'لا صفقات تطابق هذه الفلاتر.')}</p><button class="btn btn-outline btn-sm" data-action="jr-reset">${T3('Clear filters', 'مسح الفلاتر')}</button></div>`}
+  </div>`;
 }
 function v3DrawMinis() {
   document.querySelectorAll('canvas[data-v3mini]').forEach(cv => {
@@ -12856,12 +13497,19 @@ function v3Click(action, el) {
     }
     /* journal */
     case 'v3-toggle-trade': { const id = parseInt(A('data-id'), 10); V3.openTrade = V3.openTrade === id ? null : id; render(); return true; }
-    case 'v3-journal-filter': V3.journalFilter = A('data-f'); render(); return true;
+    case 'v3-journal-filter': V3.journalFilter = A('data-f'); V3.jrPage = 1; render(); return true;
+    case 'jr-tab': V3.jrTab = A('data-t'); V3.openTrade = null; render(); window.scrollTo(0, 0); return true;
+    case 'jr-sort': { const k = A('data-k'), cur = V3.jrSort || { k: 'openedAt', dir: -1 }; V3.jrSort = { k, dir: cur.k === k ? -cur.dir : (k === 'symbol' || k === 'strategyName' || k === 'side' ? 1 : -1) }; V3.jrPage = 1; render(); return true; }
+    case 'jr-side': V3.jrSide = A('data-f'); V3.jrPage = 1; render(); return true;
+    case 'jr-range': V3.jrRange = A('data-f'); V3.jrPage = 1; render(); return true;
+    case 'jr-page': V3.jrPage = (V3.jrPage || 1) + parseInt(A('data-d'), 10); render(); return true;
+    case 'jr-reset': V3.journalFilter = 'all'; V3.jrSide = ''; V3.jrRange = 'all'; V3.jrQ = ''; V3.journalStrategy = ''; V3.jrPage = 1; render(); return true;
+    case 'jr-goto': { V3.jrTab = 'trades'; V3.journalFilter = 'all'; V3.jrSide = ''; V3.jrRange = 'all'; V3.jrQ = ''; V3.journalStrategy = ''; V3.openTrade = parseInt(A('data-id'), 10); const i = v3JournalFiltered().findIndex(x => x.id === V3.openTrade); V3.jrPage = i < 0 ? 1 : Math.floor(i / 25) + 1; render(); return true; }
     case 'pf-trade-filter': V3.pfFilter = A('data-f'); V3.pfLimit = 100; render(); return true;
     case 'pf-trades-more': V3.pfLimit = (V3.pfLimit || 100) + 200; render(); return true;
     case 'pf-trades-csv': pfTradesCsv(); return true;
     case 'sim-trades-more': V3.simLimit = (V3.simLimit || 50) + 200; render(); return true;
-    case 'v3-journal-for': V3.journalStrategy = A('data-id'); V3.journalFilter = 'all'; State.view = 'journal'; render(); window.scrollTo(0, 0); return true;
+    case 'v3-journal-for': V3.journalStrategy = A('data-id'); V3.journalFilter = 'all'; V3.jrTab = 'trades'; V3.jrPage = 1; State.view = 'journal'; render(); window.scrollTo(0, 0); return true;
     case 'v3-export-csv': v3ExportCsv(A('data-year') || V3.year); return true;
     case 'v3-statement': v3Statement(A('data-year') || V3.year); return true;
     /* backtest costs */
@@ -12959,7 +13607,7 @@ function v3Click(action, el) {
 }
 async function v3LoadAlertsForce() { const r = await v3api('GET', '/api/alerts'); if (r.ok) { V3.alerts = r.data.alerts; V3.alertLimit = r.data.limit; } render(); }
 function v3Input(t, field) {
-  if (field && (field.indexOf('v5-') === 0 || field === 'tpl-search')) return v5Input(t, field);
+  if (field && (field.indexOf('v5-') === 0 || field === 'tpl-search' || field === 'scr-search' || field === 'jr-search')) return v5Input(t, field);
   if (field === 'v3-golive-maxloss') { if (State.modal) State.modal.maxLosses = t.value; return true; }
   if (field === 'v3-golive-type') {
     const m = State.modal; if (m) { m.typed = t.value; m.ack = t.value.trim().toUpperCase() === 'GO LIVE'; const b = document.querySelector('[data-action="golive-run"]'); if (b) { const gs = (State.user.strategies || []).find(x => x.id === m.stratId) || {}; const cks = goLiveChecks(gs, m.mode, m.brokerId); v3GoLiveChecks(gs, m.mode, cks); const fails = cks.some(c => c.status === 'fail'); b.disabled = fails || !m.ack; } }
@@ -12977,7 +13625,7 @@ function v3Change(t, field) {
   if (field === 'v3-event') { const patch = { notify: { events: { [t.getAttribute('data-k')]: t.checked } } }; v3api('PUT', '/api/settings', patch).then(r => { if (r.ok) V3.settings = r.data; else toast(T3('Could not save.', 'تعذر الحفظ.'), 'err'); render(); }); return true; }
   if (field === 'v3-daily-hour') { v3SaveSettings({ notify: { dailyHourUtc: parseInt(t.value, 10) } }, T3('Saved.', 'تم الحفظ.')); return true; }
   if (field === 'v3-year') { V3.year = parseInt(t.value, 10); render(); return true; }
-  if (field === 'v3-journal-strategy') { V3.journalStrategy = t.value; render(); return true; }
+  if (field === 'v3-journal-strategy') { V3.journalStrategy = t.value; V3.jrPage = 1; render(); return true; }
   if (field === 'pf-trade-strategy') { V3.pfStrat = t.value; V3.pfLimit = 100; render(); return true; }
   const d = V3.alertDraft;
   if (d && field === 'v3-alert-tf') { d.timeframe = t.value; return true; }
@@ -13447,6 +14095,9 @@ function v5Input(t, field) {
   if (field === 'v5-ai-baseurl') { v5AiDraft().baseUrl = v; return true; }
   if (field === 'v5-ai-key') { v5AiDraft().apiKey = v; return true; }
   if (field.startsWith('v5-st-')) { V5.stripeDraft[field.slice(6)] = v; return true; }
+  if (field === 'jr-search') { V3.jrQ = v; V3.jrPage = 1; render(); const e = document.querySelector('[data-field="jr-search"]'); if (e) { e.focus(); try { e.setSelectionRange(v.length, v.length); } catch (x) {} } return true; }
+  if (field === 'scr-search') { State.screenQ = v; const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner(); return true; }
+  if (field === 'scr-custom') { screenCfg().custom = v; return true; }
   if (field === 'tpl-search') { State.tplQuery = v; State.tplLimit = TPL_PAGE; const r = document.getElementById('tpl-results'); if (r) r.innerHTML = renderTemplateResults(); return true; }
   return true;
 }
@@ -13457,6 +14108,7 @@ function v5Change(t, field) {
 function v5Click(action, el) {
   switch (action) {
     case 'tpl-market': State.tplMarket = el.getAttribute('data-val') || 'All'; State.tplLimit = TPL_PAGE; render(); return true;
+    case 'tpl-dir': State.tplDir = el.getAttribute('data-val') || 'All'; State.tplLimit = TPL_PAGE; render(); return true;
     case 'tpl-family': State.tplFamily = el.getAttribute('data-val') || 'All'; State.tplLimit = TPL_PAGE; render(); return true;
     case 'tpl-more': State.tplLimit = (State.tplLimit || TPL_PAGE) + TPL_PAGE; { const r = document.getElementById('tpl-results'); if (r) r.innerHTML = renderTemplateResults(); else render(); } return true;
     case 'v6-period': V6.period = el.getAttribute('data-period') || '1M'; render(); return true;
