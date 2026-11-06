@@ -559,6 +559,30 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;letter-spac
 @media (prefers-reduced-motion:reduce){.bk-ln.on,.cx-fl{animation:none;}}
 
 
+
+/* ---- Following + Alerts v2 ---- */
+.fw-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+@media(max-width:900px){.fw-stats{grid-template-columns:repeat(2,1fr);}}
+.fw-stat{padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 14%,var(--panel-alt)),var(--panel-alt) 70%);}
+.fw-stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);}
+.fw-stat .v{font-family:var(--font-mono);font-size:26px;font-weight:600;margin:4px 0 2px;}.fw-stat .s{font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-bottom:18px;}
+.fw-grid .post-card{margin-bottom:0;height:100%;display:flex;flex-direction:column;}.fw-grid .post-card .post-actions{margin-top:auto;}
+.fw-day2{display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:6px 0 10px;}
+.fw-day2:after{content:"";flex:1;height:1px;background:var(--border);}
+.fw-lbr{display:grid;grid-template-columns:22px minmax(0,1fr) 62px;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--border-soft,rgba(255,255,255,.06));cursor:pointer;font-size:12.5px;}
+.fw-lbr:first-of-type{border-top:0;}.fw-lbr .n{font-weight:800;color:var(--text-faint);}.fw-lbr .n.g{color:#F2B705;}
+.fw-lbr .bar{height:5px;border-radius:3px;background:rgba(255,255,255,.06);margin-top:4px;overflow:hidden;}.fw-lbr .bar div{height:100%;border-radius:3px;}
+.fw-lbr .r{text-align:right;font-family:var(--font-mono);font-weight:700;}
+.al-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0 14px;}
+.al-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;}
+.al-card{position:relative;display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--panel-alt);overflow:hidden;}
+.al-card:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--sc,var(--border));}
+.al-card.active{--sc:var(--long);}.al-card.fired{--sc:var(--brand,#FF4FA3);background:linear-gradient(150deg,rgba(255,79,163,.1),var(--panel-alt) 60%);}.al-card.paused{--sc:var(--text-faint);opacity:.8;}
+.al-top{display:flex;gap:12px;align-items:center;}
+.al-conds{display:flex;flex-direction:column;gap:4px;}.al-conds .v9-chip{display:block;}.al-conds em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--text-faint);padding-inline-start:10px;}
+.al-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:6px;border-top:1px solid var(--border-soft,rgba(255,255,255,.06));}
+.al-meta{font-size:11.5px;color:var(--text-faint);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 /* ---- Journal v2 ---- */
 .jr-tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap;}
 .jr-tab{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--text-dim);cursor:pointer;display:flex;gap:8px;align-items:center;}
@@ -631,6 +655,39 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;letter-spac
 .usg3-pill i{width:8px;height:8px;border-radius:50%;background:#2ED9A8;box-shadow:0 0 0 0 rgba(46,217,168,.6);animation:usgpulse 1.8s infinite;}
 @keyframes usgpulse{70%{box-shadow:0 0 0 7px rgba(46,217,168,0);}100%{box-shadow:0 0 0 0 rgba(46,217,168,0);}}
 @media (prefers-reduced-motion:reduce){.usg3-pill i{animation:none;}}
+
+/* ---- Export code v3 graphics ---- */
+.cx3-hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:22px;align-items:center;padding:26px 28px;margin-bottom:16px;border-radius:20px;overflow:hidden;border:1px solid var(--border);background:radial-gradient(900px 300px at 85% 0%,rgba(91,141,239,.22),transparent 60%),radial-gradient(700px 260px at 0% 100%,rgba(46,217,168,.16),transparent 60%),var(--panel);}
+@media(max-width:900px){.cx3-hero{grid-template-columns:1fr;padding:20px;}}
+.cx3-hero h2{font-size:26px;line-height:1.15;margin:0 0 10px;letter-spacing:-.01em;}
+.cx3-hero h2 span{background:linear-gradient(90deg,#2ED9A8,#5B8DEF);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.cx3-hero p{font-size:13.5px;line-height:1.65;color:var(--text-dim);margin:0 0 14px;max-width:46ch;}
+.cx3-tags{display:flex;gap:8px;flex-wrap:wrap;}.cx3-tags span{font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:rgba(255,255,255,.04);}
+.cx3-art svg{width:100%;height:auto;display:block;}
+.cx3-flow{stroke-dasharray:5 6;animation:cx3dash 1.4s linear infinite;}@keyframes cx3dash{to{stroke-dashoffset:-22;}}
+@media (prefers-reduced-motion:reduce){.cx3-flow{animation:none;}}
+.cx3-bp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px;margin:14px 0 18px;}
+@media(max-width:860px){.cx3-bp{grid-template-columns:1fr;}}
+.cx3-rules{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:16px;padding:14px 16px;background:var(--panel-alt);}
+.cx3-rules h4,.cx3-fig h4{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);margin:0 0 10px;}
+.cx3-rule{display:flex;gap:10px;align-items:center;padding:9px 11px;border-radius:11px;background:rgba(91,141,239,.09);border:1px solid rgba(91,141,239,.3);font-size:12.5px;}
+.cx3-rule i{font-style:normal;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:rgba(91,141,239,.25);color:#9DB9FF;}
+.cx3-and{text-align:center;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--text-faint);margin:4px 0;}
+.cx3-exits{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:auto;padding-top:14px;}
+.cx3-exits div{border-radius:11px;padding:8px 10px;border:1px solid var(--border);background:rgba(255,255,255,.03);font-size:11px;color:var(--text-faint);}
+.cx3-exits b{display:block;font-family:var(--font-mono);font-size:15px;color:var(--text);margin-top:2px;}
+.cx3-exits .tp{border-color:rgba(46,217,168,.4);}.cx3-exits .tp b{color:#2ED9A8;}.cx3-exits .sl{border-color:rgba(251,106,106,.4);}.cx3-exits .sl b{color:#FB6A6A;}
+.cx3-fig{border:1px solid var(--border);border-radius:16px;padding:14px 16px;background:var(--panel-alt);}
+.cx3-fig svg{width:100%;height:auto;display:block;}
+.cx3-pl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;}
+.cx3-pc{position:relative;text-align:start;padding:16px 18px;border-radius:16px;border:1px solid var(--border);background:var(--panel-alt);color:inherit;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s;display:grid;grid-template-columns:56px 1fr;gap:14px;align-items:center;}
+.cx3-pc:hover{transform:translateY(-2px);}
+.cx3-pc.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc),0 12px 34px -14px var(--pc);background:linear-gradient(150deg,color-mix(in srgb,var(--pc) 14%,var(--panel-alt)),var(--panel-alt) 70%);}
+.cx3-pc b{font-size:15px;display:block;}.cx3-pc em{font-style:normal;font-size:12px;color:var(--text-dim);display:block;margin:1px 0 6px;}
+.cx3-pc small{font-size:11.5px;color:var(--text-faint);line-height:1.5;display:block;}
+.cx3-pc .tick{position:absolute;top:12px;inset-inline-end:12px;width:20px;height:20px;border-radius:50%;display:none;place-items:center;background:var(--pc);color:#0B0F17;font-size:12px;font-weight:800;}
+.cx3-pc.on .tick{display:grid;}
+.cx-code .k{color:#C792EA;}.cx-code .c{color:#6B7A99;font-style:italic;}.cx-code .s{color:#C3E88D;}.cx-code .n{color:#F78C6C;}.cx-code .f{color:#82AAFF;}.cx-code .t{color:#FFCB6B;}.cx-code .p{color:#FF4FA3;}
 /* ---- Export code page v2 + admin usage v2 ---- */
 .cx-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
 .cx-step{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:14px;border:1px solid var(--border);background:var(--panel);}
@@ -8296,7 +8353,7 @@ function renderFeed() {
     if (sort === 'return') posts.sort((a, b) => (b.totalReturn || 0) - (a.totalReturn || 0));
     else if (sort === 'copies') posts.sort((a, b) => (b.copies || 0) - (a.copies || 0));
     else posts.sort((a, b) => b.publishedAt - a.publishedAt);
-    posts = posts.slice(0, 30);
+    const allPosts = posts, lim = State.followLimit || 12; posts = posts.slice(0, lim);
     const rets = (m) => m.list.filter(e => !e.pending && typeof e.totalReturn === 'number').map(e => e.totalReturn);
     const avg = (m) => { const r = rets(m); return r.length ? r.reduce((x, y) => x + y, 0) / r.length : null; };
     const fresh = (m) => m.latest && Date.now() - m.latest < 48 * 3600000;
@@ -8317,8 +8374,25 @@ function renderFeed() {
     const bestPost = followed.flatMap(m => m.list).filter(e => !e.pending && typeof e.totalReturn === 'number').sort((x, y) => y.totalReturn - x.totalReturn)[0];
     // day dividers for the timeline
     const dayLabel = (ts) => { const d = new Date(ts), t0 = new Date(); t0.setHours(0, 0, 0, 0); const diff = Math.round((t0 - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000); return diff <= 0 ? T3('Today', 'اليوم') : diff === 1 ? T3('Yesterday', 'أمس') : diff < 7 ? T3('This week', 'هذا الأسبوع') : T3('Earlier', 'سابقًا'); };
-    let lastDay = null; const feedHtml = posts.map(e => { const dl = dayLabel(e.publishedAt); const div = dl !== lastDay ? `<div class="fw-day"><span>${dl}</span></div>` : ''; lastDay = dl; return div + `<div class="fw-item">${renderPostCard(e)}</div>`; }).join('');
+    let lastDay = null, feedHtml = '';
+    posts.forEach(e => { const dl = dayLabel(e.publishedAt); if (dl !== lastDay) { if (lastDay !== null) feedHtml += '</div>'; feedHtml += `<div class="fw-day2">${dl}</div><div class="fw-grid">`; lastDay = dl; } feedHtml += renderPostCard(e, { compact: true }); });
+    if (lastDay !== null) feedHtml += '</div>';
+    if (allPosts.length > posts.length) feedHtml += `<div style="text-align:center;margin:4px 0 16px;"><button class="btn btn-outline btn-sm" data-action="follow-more">${T3('Show more', 'عرض المزيد')} (${allPosts.length - posts.length})</button></div>`;
+    // summary strip
+    const dayAgo = Date.now() - 864e5, fPosts = all.filter(e => followingUsernames.includes(e.ownerUsername));
+    const newToday = fPosts.filter(e => e.publishedAt >= dayAgo).length;
+    const fRets = fPosts.filter(e => !e.pending && typeof e.totalReturn === 'number').map(e => e.totalReturn);
+    const fAvg = fRets.length ? fRets.reduce((x, y) => x + y, 0) / fRets.length : null;
+    const stat = (l, v, sub, c) => `<div class="fw-stat" style="--c:${c};"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+    const strip = personalized ? `<div class="fw-stats">
+      ${stat(T3('Following', 'تتابع'), followed.length, T3(`${followersOf(me).length} follow you back`, `${followersOf(me).length} يتابعونك`), '#5B8DEF')}
+      ${stat(T3('New in 24 hours', 'جديد خلال 24 ساعة'), newToday, T3(`${fPosts.length} strategies in total`, `${fPosts.length} استراتيجية`), '#2ED9A8')}
+      ${stat(T3('Average return', 'متوسط العائد'), fAvg === null ? 'n/a' : fmtPct(fAvg), T3('Backtests of what they published', 'اختبارات ما نشروه'), fAvg !== null && fAvg < 0 ? '#FB6A6A' : '#F2B705')}
+      ${stat(T3('Best so far', 'الأفضل'), bestPost ? fmtPct(bestPost.totalReturn) : 'n/a', bestPost ? esc(bestPost.name) + ' · ' + esc(bestPost.ownerName) : '', '#FF4FA3')}
+    </div>` : '';
+    const lbHtml = lb.length ? `<div class="panel panel-pad" style="margin-top:14px;"><div class="panel-head"><h3>${T3('Top traders you follow', 'أفضل من تتابعهم')}</h3></div>${lb.map((x, i) => `<div class="fw-lbr" data-action="follow-filter" data-username="${esc(x.m.uname)}"><span class="n ${i === 0 ? 'g' : ''}">${i + 1}</span><div style="min-width:0;"><b>${esc(x.m.name)}</b><div class="bar"><div style="width:${Math.max(6, Math.abs(x.a) / lbMax * 100).toFixed(0)}%;background:${x.a >= 0 ? 'var(--long)' : 'var(--short)'}"></div></div></div><span class="r" style="color:${x.a >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtPct(x.a)}</span></div>`).join('')}<div class="faint" style="font-size:11px;margin-top:6px;">${T3('Average backtest return of their published strategies.', 'متوسط عائد اختبارات استراتيجياتهم.')}</div></div>` : '';
     body = `
+      ${strip}
       <div class="fw-orbit-wrap panel">
         <div class="fw-orbit">
           <div class="fw-orb fw-add" data-action="nav" data-view="community"><span class="fw-ring fw-ring-add">${icon('plus')}</span><b>${T3('Discover', 'اكتشف')}</b><em>&nbsp;</em></div>
@@ -8339,10 +8413,11 @@ function renderFeed() {
             ${State.followOnly ? `<button class="btn btn-ghost btn-sm" data-action="follow-filter" data-username="">${icon('x')} ${T3('Clear filter', 'مسح التصفية')}</button>` : ''}
           </div>` : ''}
           ${!personalized ? `<div class="panel fw-hero"><div class="fw-hero-art">${icon('compass')}</div><h3>${T3('Build a feed worth opening', 'ابنِ خلاصة تستحق الفتح')}</h3><p class="muted">${T3('Follow a few traders and their newly published strategies land here as a timeline, with real backtest returns. Pick from the suggestions, or browse the community.', 'تابع بعض المتداولين لتظهر هنا استراتيجياتهم الجديدة كخط زمني مع عوائد اختبار حقيقية. اختر من المقترحات أو تصفح المجتمع.')}</p><button class="btn btn-primary btn-sm" data-action="nav" data-view="community">${T3('Browse the community', 'تصفح المجتمع')}</button></div>`
-            : posts.length ? `<div class="fw-rail">${feedHtml}</div>`
+            : posts.length ? feedHtml
             : `<div class="panel"><div class="empty-state" style="padding:50px 20px;">${icon('feed')}<p>${T3('No published strategies match. Traders you follow have not posted anything new, or your filter is too narrow.', 'لا توجد استراتيجيات مطابقة.')}</p></div></div>`}
         </div>
         <aside class="fw-side">
+          ${lbHtml}
           ${suggestions.length ? `<div class="panel panel-pad" style="margin-top:14px;"><div class="panel-head"><h3>${T3('Discover traders', 'اكتشف متداولين')}</h3></div>${suggestions.slice(0, 4).map(sugCard).join('')}</div>` : ''}
         </aside>
       </div>`;
@@ -8372,6 +8447,7 @@ function renderFeed() {
 }
 function renderPostCard(e, opts) {
   opts = opts || {};
+  const cOpen = !opts.compact || (State.openComments || {})[e.id];
   const liked = Array.isArray(e.likes) && e.likes.includes(State.user.username);
   const clickableAttrs = e.ownerUsername ? `data-action="view-profile" data-username="${esc(e.ownerUsername)}"` : '';
   const clickableClass = e.ownerUsername ? 'clickable' : '';
@@ -8400,11 +8476,11 @@ function renderPostCard(e, opts) {
     </div>
     <div class="post-actions">
       <button class="post-action-btn ${liked ? 'on' : ''}" data-action="toggle-like" data-id="${e.id}">${icon(liked ? 'heartFill' : 'heart')} <span>${(e.likes || []).length}</span></button>
-      <span class="post-action-btn" style="cursor:default;">${icon('comment')} <span>${(e.comments || []).length}</span></span>
+      ${opts.compact ? `<button class="post-action-btn ${cOpen ? 'on' : ''}" data-action="toggle-comments" data-id="${e.id}" title="${T3('Comments', 'التعليقات')}">${icon('comment')} <span>${(e.comments || []).length}</span></button>` : `<span class="post-action-btn" style="cursor:default;">${icon('comment')} <span>${(e.comments || []).length}</span></span>`}
       <span style="flex:1;"></span>
       ${e.ownerUsername === State.user.username ? `<span class="badge badge-brand">Yours</span>` : `<button class="btn btn-outline btn-sm" data-action="copy-community" data-id="${e.id}">${icon('copy')} Copy strategy</button>`}
     </div>
-    <div class="post-comments">
+    ${cOpen ? `<div class="post-comments">
       ${(e.comments || []).slice(-4).map(c => `
         <div class="comment-row">
           ${renderAvatarBit(c.photoUrl, c.color, initialsOf(c.name), 22)}
@@ -8414,7 +8490,7 @@ function renderPostCard(e, opts) {
         <input class="input" name="text" placeholder="Write a comment…" maxlength="280">
         <button type="submit" class="btn-icon">${icon('arrow')}</button>
       </form>
-    </div>
+    </div>` : ''}
   </div>`;
 }
 
@@ -8989,22 +9065,76 @@ function renderDetail() {
   <div class="panel"><div class="empty-state" style="padding:60px 20px;">${icon('chart')}<p>${s.backtestError ? esc(s.backtestError) + ' ' : ''}${s.backtestError ? 'There is no result because VaticTrader only backtests on real market history.' : 'Loading real market history to backtest this strategy…'}</p><button class="btn btn-primary btn-sm" data-action="rerun-backtest" data-id="${s.id}">${icon('chart')} Run backtest on real data</button> <button class="btn btn-ghost btn-sm" data-action="edit-strategy" data-id="${s.id}">${icon('edit')} Open in builder</button></div></div>`}
   `;
 }
+const CX_KW = new Set(['if','else','for','while','return','and','or','not','true','false','var','varip','input','switch','break','continue','void','const','static','extern','int','double','bool','string','long','float','datetime','color','input','enum','struct','class','na','strategy','plot','input']);
+const CX_TYPES = new Set(['int','double','bool','string','long','float','datetime','color','void','ulong','uint','ENUM_ORDER_TYPE','MqlTradeRequest','MqlTradeResult']);
+function cxHighlight(code) {
+  const re = /(\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*")|(#\w+)|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_][\w.]*)(?=\()|\b([A-Za-z_]\w*)\b/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index)); last = re.lastIndex;
+    const t = m[0];
+    if (m[1]) out += `<span class="c">${esc(t)}</span>`;
+    else if (m[2]) out += `<span class="s">${esc(t)}</span>`;
+    else if (m[3]) out += `<span class="p">${esc(t)}</span>`;
+    else if (m[4]) out += `<span class="n">${esc(t)}</span>`;
+    else if (m[5]) out += `<span class="f">${esc(t)}</span>`;
+    else if (CX_TYPES.has(t)) out += `<span class="t">${esc(t)}</span>`;
+    else if (CX_KW.has(t)) out += `<span class="k">${esc(t)}</span>`;
+    else out += esc(t);
+  }
+  return out + esc(code.slice(last));
+}
 function cxWin(code, lang, file, copyAction) {
   const lines = code.split('\n').length;
   return `<div class="cx-win">
     <div class="cx-bar"><span class="cx-dots"><i></i><i></i><i></i></span><b class="mono">${esc(file)}</b><span class="faint mono" style="font-size:11px;">${lines} ${T3('lines', 'سطر')}</span>
       <button type="button" class="btn btn-ghost btn-sm code-copy-btn" data-action="${copyAction}" data-lang="${lang}">${icon('copy')} ${T3('Copy', 'نسخ')}</button></div>
-    <div class="cx-body"><pre class="cx-gut" aria-hidden="true">${Array.from({ length: lines }, (_, k) => k + 1).join('\n')}</pre><pre class="code-block cx-code"><code>${esc(code)}</code></pre></div>
+    <div class="cx-body"><pre class="cx-gut" aria-hidden="true">${Array.from({ length: lines }, (_, k) => k + 1).join('\n')}</pre><pre class="code-block cx-code"><code>${cxHighlight(code)}</code></pre></div>
   </div>`;
 }
 function cxPlatforms(lang, action) {
   const P = [
-    { id: 'pine', n: 'TradingView', f: 'Pine Script v5', ext: '.pine', c: '#2EA3F2', d: T3('Paste into the Pine Editor, then add to chart to see signals and backtest there.', 'الصقه في محرر Pine ثم أضفه للرسم لرؤية الإشارات.') },
-    { id: 'mql5', n: 'MetaTrader 5', f: 'MQL5 Expert Advisor', ext: '.mq5', c: '#FF6259', d: T3('Compile in MetaEditor, then attach to a chart or run in the Strategy Tester.', 'قم بتجميعه في MetaEditor ثم أرفقه بالرسم أو شغله في مختبر الاستراتيجيات.') },
+    { id: 'pine', n: 'TradingView', f: 'Pine Script v5', ext: '.pine', c: '#2EA3F2', d: T3('Paste into the Pine Editor, add to chart, and backtest on TradingView.', 'الصقه في محرر Pine وأضفه للرسم.') },
+    { id: 'mql5', n: 'MetaTrader 5', f: 'MQL5 Expert Advisor', ext: '.mq5', c: '#FF6259', d: T3('Compile in MetaEditor, then run it in the Strategy Tester or on a demo chart.', 'قم بتجميعه في MetaEditor ثم شغله في مختبر الاستراتيجيات.') },
   ];
-  return `<div class="cx-plats">${P.map(x => `<button type="button" class="cx-plat ${lang === x.id ? 'on' : ''}" style="--pc:${x.c};" data-action="${action}" data-lang="${x.id}">
-    <span class="cx-pi"><svg viewBox="0 0 40 40" width="40" height="40"><rect width="40" height="40" rx="10" fill="${x.c}22" stroke="${x.c}"/><path d="M${x.id === 'pine' ? '9 27l7-9 5 5 10-13' : '10 28V14l5 8 5-8v14M28 14v14'}" stroke="${x.c}" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-    <span class="cx-pt"><b>${x.n}</b><em>${x.f} <code>${x.ext}</code></em><small>${x.d}</small></span></button>`).join('')}</div>`;
+  const ic = x => x.id === 'pine'
+    ? `<svg viewBox="0 0 56 56" width="56" height="56"><defs><linearGradient id="cxi1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#2EA3F2"/><stop offset="1" stop-color="#5B8DEF"/></linearGradient></defs><rect width="56" height="56" rx="14" fill="url(#cxi1)" opacity=".18"/><rect x=".75" y=".75" width="54.5" height="54.5" rx="13.5" fill="none" stroke="#2EA3F2" stroke-width="1.5"/><path d="M11 38l9-11 7 7 11-15 7 8" stroke="#2EA3F2" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="38" cy="19" r="3" fill="#2EA3F2"/></svg>`
+    : `<svg viewBox="0 0 56 56" width="56" height="56"><rect width="56" height="56" rx="14" fill="#FF6259" opacity=".16"/><rect x=".75" y=".75" width="54.5" height="54.5" rx="13.5" fill="none" stroke="#FF6259" stroke-width="1.5"/><path d="M13 40V16l8 12 7-12 7 12 8-12v24" stroke="#FF6259" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<div class="cx3-pl">${P.map(x => `<button type="button" class="cx3-pc ${lang === x.id ? 'on' : ''}" style="--pc:${x.c};" data-action="${action}" data-lang="${x.id}" aria-pressed="${lang === x.id}">
+    <span class="tick">&#10003;</span>${ic(x)}
+    <span><b>${x.n}</b><em>${x.f} <code>${x.ext}</code></em><small>${x.d}</small></span></button>`).join('')}</div>`;
+}
+function cxBlueprint(s) {
+  const dir = s.direction || 'long', conds = s.entryConditions || [];
+  const tp = Number(s.takeProfit) || 1, sl = Number(s.stopLoss) || 0.5;
+  const short = dir === 'short';
+  const rules = conds.length ? conds.map((c, k) => `${k ? `<div class="cx3-and">${esc(c.logic || 'AND')}</div>` : ''}<div class="cx3-rule"><i>${T3('IF', 'إذا')}</i><span>${esc(indicatorLabel(c.indicator))} ${esc(c.operator || '')} ${esc(String(c.value === undefined || c.value === null ? '' : c.value))}</span></div>`).join('') : `<p class="muted" style="font-size:12.5px;margin:0;">${T3('No entry rules yet.', 'لا قواعد دخول بعد.')}</p>`;
+  // schematic trade diagram
+  const W = 520, H = 210, ex = 250, ey = 105, unit = 62 / Math.max(tp, sl, 0.3);
+  const tpH = Math.min(78, Math.max(26, tp * unit)), slH = Math.min(78, Math.max(18, sl * unit));
+  const tpY = short ? ey + tpH : ey - tpH, slY = short ? ey - slH : ey + slH;
+  const G = '#2ED9A8', R = '#FB6A6A';
+  const path = short ? 'M20,52 C70,44 100,70 140,66 C180,62 205,92 ex,ey' : 'M20,160 C70,168 100,142 140,148 C180,152 205,118 ex,ey';
+  const pth = path.replace('ex,ey', `${ex},${ey}`);
+  const after = short ? `M${ex},${ey} C${ex + 40},${ey + 20} ${ex + 80},${ey + tpH * .5} ${ex + 110},${tpY}` : `M${ex},${ey} C${ex + 40},${ey - 20} ${ex + 80},${ey - tpH * .5} ${ex + 110},${tpY}`;
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${short ? 'Short' : 'Long'} trade with take profit and stop loss">
+    <defs><linearGradient id="bpg" x1="0" x2="1"><stop offset="0" stop-color="#5B8DEF"/><stop offset="1" stop-color="#2ED9A8"/></linearGradient><pattern id="bpd" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".8" fill="rgba(255,255,255,.12)"/></pattern></defs>
+    <rect width="${W}" height="${H}" rx="12" fill="url(#bpd)"/>
+    <rect x="${ex}" y="${Math.min(ey, tpY)}" width="${W - ex - 16}" height="${tpH}" fill="${G}" opacity=".13"/><rect x="${ex}" y="${Math.min(ey, slY)}" width="${W - ex - 16}" height="${slH}" fill="${R}" opacity=".13"/>
+    <line x1="${ex}" x2="${W - 16}" y1="${tpY}" y2="${tpY}" stroke="${G}" stroke-dasharray="5 4" stroke-width="1.6"/><line x1="${ex}" x2="${W - 16}" y1="${slY}" y2="${slY}" stroke="${R}" stroke-dasharray="5 4" stroke-width="1.6"/>
+    <line x1="20" x2="${W - 16}" y1="${ey}" y2="${ey}" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>
+    <path d="${pth}" fill="none" stroke="#8B93A7" stroke-width="2.4" stroke-linecap="round"/><path d="${after}" fill="none" stroke="url(#bpg)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="${ex}" cy="${ey}" r="7" fill="#0B0F17" stroke="#fff" stroke-width="2"/>
+    <path d="${short ? `M${ex},${ey - 22} l-7,-11 h14 z` : `M${ex},${ey + 22} l-7,11 h14 z`}" fill="${short ? R : G}"/>
+    <text x="${ex - 14}" y="${ey - 9}" text-anchor="end" font-size="11" fill="#C9D1E6" font-family="monospace">ENTRY</text>
+    <text x="${W - 22}" text-anchor="end" y="${tpY + (short ? -7 : 17)}" font-size="12" font-weight="700" fill="${G}" font-family="monospace">TAKE PROFIT +${tp}%</text>
+    <text x="${W - 22}" text-anchor="end" y="${slY + (short ? 17 : -7)}" font-size="12" font-weight="700" fill="${R}" font-family="monospace">STOP LOSS -${sl}%</text>
+    <text x="22" y="${H - 10}" font-size="11" fill="#8B93A7" font-family="monospace">${short ? 'SHORT' : dir === 'both' ? 'LONG (SHORT MIRRORS IT)' : 'LONG'} · ${esc(s.symbol || '')} · ${esc(s.timeframe || '')}</text></svg>`;
+  return `<div class="cx3-bp">
+    <div class="cx3-rules"><h4>${T3('Entry rules', 'قواعد الدخول')}</h4>${rules}
+      <div class="cx3-exits"><div class="tp">${T3('Take profit', 'جني الربح')}<b>+${esc(String(s.takeProfit))}%</b></div><div class="sl">${T3('Stop loss', 'وقف الخسارة')}<b>-${esc(String(s.stopLoss))}%</b></div><div>${T3('Size', 'الحجم')}<b>${esc(String(s.positionSizePct === undefined ? '' : s.positionSizePct))}%</b></div></div></div>
+    <div class="cx3-fig"><h4>${T3('How the trade works', 'كيف تعمل الصفقة')}</h4>${svg}</div>
+  </div>`;
 }
 function cxAnatomy(s) {
   const conds = (s.entryConditions || []).map((c, k) => `${k > 0 ? `<span class="cx-logic">${esc(c.logic || 'AND')}</span>` : ''}<span class="cx-chip ent"><i>${T3('Entry', 'دخول')}</i>${esc(indicatorLabel(c.indicator))} ${esc(c.operator || '')} ${esc(c.value === undefined || c.value === null ? '' : String(c.value))}</span>`).join('');
@@ -9031,7 +9161,7 @@ function renderCodeExport(s) {
     <div class="panel-head"><h3>${icon('code')} ${T3('Export code', 'تصدير الكود')}</h3>
       <div class="cx-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="download-code" data-lang="${lang}">${icon('download')} ${T3('Download', 'تنزيل')} ${lang === 'pine' ? '.pine' : '.mq5'}</button></div></div>
     <div class="cx-flow" aria-hidden="true"><span class="cx-fn"><b>${T3('Your rules', 'قواعدك')}</b></span><svg viewBox="0 0 80 12" class="cx-arrow"><path d="M2 6h70M66 1l7 5-7 5"/></svg><span class="cx-fn gen"><b>${T3('Generator', 'المولّد')}</b></span><svg viewBox="0 0 80 12" class="cx-arrow"><path d="M2 6h70M66 1l7 5-7 5"/></svg><span class="cx-fn out"><b>${lang === 'pine' ? 'Pine v5' : 'MQL5'}</b></span></div>
-    ${cxAnatomy(s)}
+    ${cxBlueprint(s)}
     ${cxPlatforms(lang, 'set-code-lang')}
     <div style="height:14px;"></div>
     ${cxWin(code, lang, safe + (lang === 'pine' ? '.pine' : '.mq5'), 'copy-code')}
@@ -9289,15 +9419,23 @@ function renderDeveloper() {
   const selected = strategies.find(s => s.id === State.codeExportStrategyId);
   const dirBadge = d => `<span class="cx-badge ${esc(d || 'long')}">${esc(d === 'both' ? T3('long + short', 'شراء وبيع') : (d || 'long'))}</span>`;
   return `
-  <section class="panel panel-pad cx-hero">
-    <div class="cx-hero-art" aria-hidden="true"><svg viewBox="0 0 360 120"><defs><linearGradient id="cxg" x1="0" x2="1"><stop offset="0" stop-color="#2ED9A8"/><stop offset="1" stop-color="#5B8DEF"/></linearGradient></defs>
-      <rect x="6" y="22" width="92" height="76" rx="10" class="cx-b"/><path d="M18 40h44M18 54h60M18 68h36M18 82h52" class="cx-l"/>
-      <path d="M104 60h56" class="cx-fl"/><path d="M154 52l10 8-10 8" class="cx-fa"/>
-      <circle cx="190" cy="60" r="24" class="cx-gen"/><path d="M180 66l6-12 5 8 4-6 6 10z" fill="#0B0F17"/>
-      <path d="M216 60h40" class="cx-fl"/><path d="M250 52l10 8-10 8" class="cx-fa"/>
-      <rect x="266" y="14" width="88" height="40" rx="8" class="cx-b p"/><text x="310" y="38" text-anchor="middle" class="cx-t">Pine v5</text>
-      <rect x="266" y="66" width="88" height="40" rx="8" class="cx-b m"/><text x="310" y="90" text-anchor="middle" class="cx-t">MQL5</text></svg></div>
-    <div class="cx-hero-tx"><h3>${T3('From your rules to runnable code', 'من قواعدك إلى كود قابل للتشغيل')}</h3><p class="muted">${T3('Pick a strategy, choose TradingView or MetaTrader 5, then copy or download code written from that strategy\'s real entry rules, take profit, stop loss and size.', 'اختر استراتيجية ومنصة ثم انسخ أو نزّل الكود المكتوب من قواعدها الفعلية.')}</p></div>
+  <section class="cx3-hero">
+    <div><h2>${T3('Turn your strategy into', 'حوّل استراتيجيتك إلى')} <span>${T3('real trading code', 'كود تداول حقيقي')}</span></h2>
+      <p>${T3('Pick a strategy and a platform. VaticTrader writes the Pine Script or MQL5 from your actual entry rules, take profit, stop loss and size, ready to copy or download.', 'اختر استراتيجية ومنصة ثم انسخ أو نزّل الكود.')}</p>
+      <div class="cx3-tags"><span>Pine Script v5</span><span>MQL5 Expert Advisor</span><span>${T3('Long and short', 'شراء وبيع')}</span><span>${T3('Copy or download', 'نسخ أو تنزيل')}</span></div></div>
+    <div class="cx3-art" aria-hidden="true"><svg viewBox="0 0 560 250">
+      <defs><linearGradient id="h3a" x1="0" x2="1"><stop offset="0" stop-color="#2ED9A8"/><stop offset="1" stop-color="#5B8DEF"/></linearGradient><linearGradient id="h3b" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1B2236"/><stop offset="1" stop-color="#121829"/></linearGradient><filter id="h3g" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="9"/></filter></defs>
+      <g><rect x="6" y="30" width="150" height="46" rx="12" fill="url(#h3b)" stroke="rgba(91,141,239,.5)"/><circle cx="26" cy="53" r="7" fill="#5B8DEF"/><rect x="42" y="45" width="84" height="6" rx="3" fill="#8B93A7" opacity=".7"/><rect x="42" y="57" width="58" height="6" rx="3" fill="#8B93A7" opacity=".4"/></g>
+      <g><rect x="6" y="102" width="150" height="46" rx="12" fill="url(#h3b)" stroke="rgba(91,141,239,.5)"/><circle cx="26" cy="125" r="7" fill="#F2B705"/><rect x="42" y="117" width="72" height="6" rx="3" fill="#8B93A7" opacity=".7"/><rect x="42" y="129" width="94" height="6" rx="3" fill="#8B93A7" opacity=".4"/></g>
+      <g><rect x="6" y="174" width="150" height="46" rx="12" fill="url(#h3b)" stroke="rgba(91,141,239,.5)"/><circle cx="26" cy="197" r="7" fill="#FF4FA3"/><rect x="42" y="189" width="90" height="6" rx="3" fill="#8B93A7" opacity=".7"/><rect x="42" y="201" width="46" height="6" rx="3" fill="#8B93A7" opacity=".4"/></g>
+      <path d="M158,53 C200,53 200,125 232,125 M158,125 L232,125 M158,197 C200,197 200,125 232,125" fill="none" stroke="url(#h3a)" stroke-width="2.4" class="cx3-flow"/>
+      <circle cx="262" cy="125" r="34" fill="url(#h3a)" opacity=".5" filter="url(#h3g)"/><circle cx="262" cy="125" r="30" fill="url(#h3a)"/><path d="M247,134 l9,-18 8,12 6,-9 9,15z" fill="#0B0F17"/>
+      <path d="M296,125 C320,125 326,70 352,70 M296,125 C320,125 326,180 352,180" fill="none" stroke="url(#h3a)" stroke-width="2.4" class="cx3-flow"/>
+      <g><rect x="352" y="14" width="200" height="112" rx="12" fill="url(#h3b)" stroke="#2EA3F2" stroke-width="1.5"/><circle cx="366" cy="27" r="3.5" fill="#FB6A6A"/><circle cx="378" cy="27" r="3.5" fill="#F2B705"/><circle cx="390" cy="27" r="3.5" fill="#2ED9A8"/><text x="540" y="31" text-anchor="end" font-size="10" fill="#2EA3F2" font-family="monospace" font-weight="700">.pine</text>
+        <rect x="366" y="42" width="60" height="6" rx="3" fill="#C792EA"/><rect x="432" y="42" width="90" height="6" rx="3" fill="#6B7A99"/><rect x="366" y="58" width="40" height="6" rx="3" fill="#82AAFF"/><rect x="412" y="58" width="70" height="6" rx="3" fill="#C3E88D"/><rect x="366" y="74" width="110" height="6" rx="3" fill="#8B93A7" opacity=".6"/><rect x="380" y="90" width="64" height="6" rx="3" fill="#F78C6C"/><rect x="450" y="90" width="48" height="6" rx="3" fill="#82AAFF"/><rect x="366" y="106" width="86" height="6" rx="3" fill="#FFCB6B"/></g>
+      <g><rect x="352" y="138" width="200" height="104" rx="12" fill="url(#h3b)" stroke="#FF6259" stroke-width="1.5"/><circle cx="366" cy="151" r="3.5" fill="#FB6A6A"/><circle cx="378" cy="151" r="3.5" fill="#F2B705"/><circle cx="390" cy="151" r="3.5" fill="#2ED9A8"/><text x="540" y="155" text-anchor="end" font-size="10" fill="#FF6259" font-family="monospace" font-weight="700">.mq5</text>
+        <rect x="366" y="166" width="70" height="6" rx="3" fill="#FF4FA3"/><rect x="442" y="166" width="70" height="6" rx="3" fill="#6B7A99"/><rect x="366" y="182" width="52" height="6" rx="3" fill="#FFCB6B"/><rect x="424" y="182" width="80" height="6" rx="3" fill="#82AAFF"/><rect x="380" y="198" width="96" height="6" rx="3" fill="#8B93A7" opacity=".6"/><rect x="380" y="214" width="58" height="6" rx="3" fill="#C792EA"/><rect x="444" y="214" width="44" height="6" rx="3" fill="#F78C6C"/></g>
+    </svg></div>
   </section>
   <div class="cx-steps">
     <div class="cx-step"><span class="n">1</span><div><b>${T3('Pick a strategy', 'اختر استراتيجية')}</b><span>${T3('Any strategy from My strategies.', 'أي استراتيجية من استراتيجياتي.')}</span></div></div>
@@ -11830,7 +11968,9 @@ function onDelegatedClick(e) {
       break;
     }
     case 'follow-filter': State.followOnly = el.getAttribute('data-username') || null; render(); break;
-    case 'feed-tab': State.feedTab = el.getAttribute('data-tab'); render(); break;
+    case 'feed-tab': State.feedTab = el.getAttribute('data-tab'); State.followLimit = 12; render(); break;
+    case 'follow-more': State.followLimit = (State.followLimit || 12) + 12; render(); break;
+    case 'toggle-comments': { const id = el.getAttribute('data-id'); State.openComments = State.openComments || {}; State.openComments[id] = !State.openComments[id]; render(); break; }
     case 'builder-view': State.builderViewMode = el.getAttribute('data-mode'); render(); break;
     case 'flow-node-click': {
       if (State.flowDragMoved) { State.flowDragMoved = false; break; } // don't treat a drag-release as a click
@@ -13101,7 +13241,7 @@ function v3AlertsView() {
       ${ind.novalue ? '<span class="faint" style="font-size:12px;min-width:90px;">' + T3('no value needed', 'لا قيمة مطلوبة') + '</span>' : `<input class="input" data-field="v3-alert-val" data-idx="${i}" value="${esc(c.value)}" placeholder="${esc(ind.placeholder)}" style="max-width:110px;">`}
       ${d.conds.length > 1 ? `<button class="btn btn-ghost btn-sm" data-action="v3-alert-cond-del" data-idx="${i}" title="${esc(T3('Remove', 'إزالة'))}">${icon('x')}</button>` : ''}
     </div>`; };
-  return `${v9AlertHero()}<div class="panel panel-pad" style="margin-bottom:16px;">
+  const formPanel = `<div class="panel panel-pad" style="margin-bottom:16px;">
       <div class="panel-head"><h3>${icon('bell')} ${T3('New alert', 'تنبيه جديد')}</h3><span class="badge badge-dim">${V3.alerts.length} / ${V3.alertLimit}</span></div>
       <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 12px;">${T3('Get told when your conditions are met, without deploying a strategy or risking anything. It checks every minute and notifies you in the app, and by email or Telegram if you set those up.', 'احصل على إشعار عند تحقق شروطك دون نشر استراتيجية أو المخاطرة. يفحص كل دقيقة ويُشعرك داخل التطبيق وعبر البريد أو تيليجرام إن فعّلتهما.')}</p>
       <div class="v9-presets"><span class="faint">${T3('Quick start', 'بداية سريعة')}</span>${V9_ALERT_PRESETS.map((p, i) => `<button type="button" class="asset-pill" data-action="v9-alert-preset" data-p="${i}">${icon(p.ic)} ${T3(p.en, p.ar)}</button>`).join('')}</div>
@@ -13122,21 +13262,33 @@ function v3AlertsView() {
           <button class="btn btn-primary btn-sm" data-action="v3-alert-create">${icon('bell')} ${T3('Create alert', 'إنشاء التنبيه')}</button>
         </div>
       </div>
-    </div>
-    <div class="panel panel-pad">
-      <div class="panel-head"><h3>${T3('Your alerts', 'تنبيهاتك')}</h3>${V3.alerts.some(a => a.status === 'active') ? `<button class="btn btn-outline btn-sm" data-action="v3-alert-check">${icon('play')} ${T3('Check now', 'افحص الآن')}</button>` : ''}</div>
-      ${V3.alerts.length ? V3.alerts.map(a => { const fc = Math.min(a.fireCount || 0, 10); return `<div class="v3-alert-row v9-arow ${a.status}">
-        <div class="v9-asym" title="${esc(a.symbol)}"><span>${esc(String(a.symbol).replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase())}</span>${a.status === 'active' ? '<i class="v9-live"></i>' : ''}</div>
-        <div style="min-width:0;flex:1;"><b>${esc(a.name)}</b> <span class="badge ${stClass[a.status] || 'badge-dim'}">${stLabel[a.status] || a.status}</span>
-          <div class="mono muted" style="font-size:12px;margin-top:2px;">${esc(a.symbol)} · ${esc(a.timeframe)}${a.repeat ? ' · ' + T3('repeating', 'متكرر') : ''}</div>
-          <div class="v9-chips">${a.conditions.map(c => `<span class="v9-chip">${esc(v3AlertCondText(c))}</span>`).join(`<em>${T3('and', 'و')}</em>`)}</div>
-          <div class="v9-ameta"><span class="faint">${a.lastCheckedAt ? T3('Checked', 'فُحص') + ' ' + timeAgo(new Date(a.lastCheckedAt).getTime()) : T3('Not checked yet', 'لم يُفحص بعد')}</span>
-            <span class="v9-fires" title="${esc(T3('Times triggered', 'مرات التنبيه'))}">${a.fireCount ? Array.from({ length: fc }, () => '<i></i>').join('') + (a.fireCount > 10 ? '<b class="mono">+' + (a.fireCount - 10) + '</b>' : '') + ' <span class="faint">' + T3('triggered', 'نُبِّه') + ' ' + a.fireCount + '×' + (a.lastFiredAt ? ', ' + timeAgo(new Date(a.lastFiredAt).getTime()) : '') + '</span>' : '<span class="faint">' + T3('never triggered', 'لم يُطلق بعد') + '</span>'}</span></div></div>
-        <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn btn-outline btn-sm" data-action="v3-alert-toggle" data-id="${a.id}">${a.status === 'active' ? T3('Pause', 'إيقاف') : a.status === 'fired' ? T3('Re-arm', 'إعادة تفعيل') : T3('Resume', 'استئناف')}</button>
-          <button class="btn btn-ghost btn-sm" data-action="v3-alert-del" data-id="${a.id}" title="${esc(T3('Delete', 'حذف'))}">${icon('trash')}</button>
-        </div></div>`; }).join('') : `<div class="empty-state" style="padding:26px 20px;"><div class="v9-empty-radar">${v9AlertRadar([])}</div><p>${T3('No alerts yet. Create one above, or press "Create alert" on any strategy to watch its entry rules.', 'لا تنبيهات بعد. أنشئ واحدًا أعلاه، أو اضغط "إنشاء تنبيه" في أي استراتيجية لمراقبة شروط دخولها.')}</p></div>`}
     </div>`;
+  const filt = V3.alertFilter || 'all', cnt = st => V3.alerts.filter(a => a.status === st).length;
+  const order = { fired: 0, active: 1, paused: 2 };
+  const list = V3.alerts.filter(a => filt === 'all' || a.status === filt).slice().sort((a, b) => (order[a.status] - order[b.status]) || (new Date(b.lastFiredAt || 0) - new Date(a.lastFiredAt || 0)));
+  const showForm = V3.alertNew || !V3.alerts.length;
+  const chips = [['all', T3('All', 'الكل'), V3.alerts.length], ['active', T3('Watching', 'قيد المراقبة'), cnt('active')], ['fired', T3('Triggered', 'تم التنبيه'), cnt('fired')], ['paused', T3('Paused', 'متوقف'), cnt('paused')]];
+  const card = a => { const fc = Math.min(a.fireCount || 0, 10);
+    return `<div class="al-card ${a.status}">
+      <div class="al-top"><div class="v9-asym" title="${esc(a.symbol)}"><span>${esc(String(a.symbol).replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase())}</span>${a.status === 'active' ? '<i class="v9-live"></i>' : ''}</div>
+        <div style="min-width:0;flex:1;"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.name)}</b><span class="mono muted" style="font-size:12px;">${esc(a.symbol)} · ${esc(a.timeframe)}${a.repeat ? ' · ' + T3('repeating', 'متكرر') : ' · ' + T3('once', 'مرة واحدة')}</span></div>
+        <span class="badge ${stClass[a.status] || 'badge-dim'}">${stLabel[a.status] || a.status}</span></div>
+      <div class="al-conds">${a.conditions.map(c => `<span class="v9-chip">${esc(v3AlertCondText(c))}</span>`).join(`<em>${T3('AND', 'و')}</em>`)}</div>
+      <div class="al-meta"><span>${a.lastCheckedAt ? T3('Checked', 'فُحص') + ' ' + timeAgo(new Date(a.lastCheckedAt).getTime()) : T3('Not checked yet', 'لم يُفحص بعد')}</span>
+        <span class="v9-fires">${a.fireCount ? Array.from({ length: fc }, () => '<i></i>').join('') + (a.fireCount > 10 ? '<b class="mono">+' + (a.fireCount - 10) + '</b>' : '') + ' ' + T3('triggered', 'نُبِّه') + ' ' + a.fireCount + '×' + (a.lastFiredAt ? ', ' + timeAgo(new Date(a.lastFiredAt).getTime()) : '') : T3('never triggered', 'لم يُنبَّه بعد')}</span></div>
+      <div class="al-foot"><span></span><span style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" data-action="v3-alert-toggle" data-id="${a.id}">${a.status === 'active' ? T3('Pause', 'إيقاف') : a.status === 'fired' ? T3('Re-arm', 'إعادة تفعيل') : T3('Resume', 'استئناف')}</button>
+        <button class="btn btn-ghost btn-sm" data-action="v3-alert-del" data-id="${a.id}" title="${esc(T3('Delete', 'حذف'))}">${icon('trash')}</button></span></div>
+    </div>`; };
+  return `${v9AlertHero()}
+    <div class="al-bar">
+      ${chips.map(([k, l, n]) => `<button class="asset-pill ${filt === k ? 'on' : ''}" data-action="al-filter" data-f="${k}">${l} <span class="faint">${n}</span></button>`).join('')}
+      <span style="flex:1;"></span>
+      ${V3.alerts.some(a => a.status === 'active') ? `<button class="btn btn-outline btn-sm" data-action="v3-alert-check">${icon('play')} ${T3('Check now', 'افحص الآن')}</button>` : ''}
+      <button class="btn ${showForm && V3.alerts.length ? 'btn-ghost' : 'btn-primary'} btn-sm" data-action="al-new">${showForm && V3.alerts.length ? icon('x') + ' ' + T3('Close', 'إغلاق') : icon('plus') + ' ' + T3('New alert', 'تنبيه جديد')}</button>
+    </div>
+    ${showForm ? formPanel : ''}
+    ${list.length ? `<div class="al-grid">${list.map(card).join('')}</div>` : `<div class="panel panel-pad"><div class="empty-state" style="padding:26px 20px;">${V3.alerts.length ? `<p>${T3('No alerts with this status.', 'لا تنبيهات بهذه الحالة.')}</p>` : `<div class="v9-empty-radar">${v9AlertRadar([])}</div><p>${T3('No alerts yet. Create one above, or press "Create alert" on any strategy to watch its entry rules.', 'لا تنبيهات بعد. أنشئ واحدًا أعلاه.')}</p>`}</div></div>`}`;
 }
 
 /* ---- V7: notification channel helpers ---- */
@@ -13532,11 +13684,13 @@ function v3Click(action, el) {
     case 'v9-alert-preset': { const d = V3.alertDraft, p = V9_ALERT_PRESETS[Number(A('data-p'))]; if (d && p) { d.conds = JSON.parse(JSON.stringify(p.conds)); } render(); return true; }
     case 'v3-alert-cond-add': { const d = V3.alertDraft; if (d.conds.length < 3) d.conds.push({ indicator: 'rsi', operator: 'is below', value: '30' }); render(); return true; }
     case 'v3-alert-cond-del': { const d = V3.alertDraft; d.conds.splice(parseInt(A('data-idx'), 10), 1); render(); return true; }
+    case 'al-filter': V3.alertFilter = A('data-f'); render(); return true;
+    case 'al-new': V3.alertNew = !V3.alertNew; render(); return true;
     case 'v3-alert-create': {
       const d = V3.alertDraft;
       for (const c of d.conds) { const ind = INDICATORS.find(x => x.id === c.indicator); if (ind && !ind.novalue && !String(c.value).trim()) { toast(T3('Fill in the value for each condition.', 'املأ القيمة لكل شرط.'), 'err'); return true; } }
       v3api('POST', '/api/alerts', { name: d.name, symbol: d.symbol.trim(), timeframe: d.timeframe, repeat: d.repeat, entryConditions: d.conds.map(c => Object.assign({ logic: 'AND' }, c)) }).then(r => {
-        if (r.ok) { V3.alerts.unshift(r.data.alert); V3.alertDraft = null; render(); toast(T3('Alert created. It checks every minute.', 'تم إنشاء التنبيه. يفحص كل دقيقة.'), 'ok'); }
+        if (r.ok) { V3.alerts.unshift(r.data.alert); V3.alertDraft = null; V3.alertNew = false; render(); toast(T3('Alert created. It checks every minute.', 'تم إنشاء التنبيه. يفحص كل دقيقة.'), 'ok'); }
         else if (r.data && r.data.upgradeRequired) { State.modal = { type: 'v3-upgrade', text: r.data.error }; render(); }
         else toast((r.data && r.data.error) || T3('Could not create the alert.', 'تعذر إنشاء التنبيه.'), 'err');
       }); return true;
