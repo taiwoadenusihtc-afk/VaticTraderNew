@@ -4251,6 +4251,532 @@ function optimizeStrategy(strat, goal) {
   return { goal, combosTried, top: allResults.slice(0, 5) };
 }
 
+/* =============================== TUNE (robust re-tuning) ===============================
+   Searches settings around a strategy's current ones (take profit, stop loss and the
+   numbers inside its entry conditions) without fooling itself:
+   1. Only the first 70% of the price history is used to score and rank settings.
+   2. The score is the return with trading costs DOUBLED, and a setting only qualifies if it
+      has enough trades and is profitable in at least 2 of 3 separate tuning periods.
+   3. Each setting is judged together with its neighbours, so a lone lucky spike loses to a
+      stable plateau.
+   4. The final 30% (the hold-out) is only looked at afterwards, for the shortlist and for
+      the current settings, and never used to rank anything.
+   Position size is not tuned: it scales risk, it does not create an edge. */
+const TUNE_SPLIT = 0.7, TUNE_MIN_TRADES = 20, TUNE_MAX_DIMS = 4, TUNE_FACTORS = [0.6, 0.8, 1, 1.25, 1.6];
+const TUNE_BOUNDS = { rsi: [1, 99], stochastic: [1, 99], mfi: [1, 99], ultimate: [1, 99], donchianpos: [1, 99], williamsr: [-99, -1], aroon: [-100, 100], volume: [105, 1000], breakout: [2, 200] };
+function tuneRound(x, intLike) { return intLike ? Math.round(x) : Math.round(x * 100) / 100; }
+function tuneDims(spec) {
+  const dims = [], uniq = (a) => [...new Set(a)];
+  const tp = Number(spec.takeProfit) || 1.5, sl = Number(spec.stopLoss) || 0.8;
+  dims.push({ id: 'tp', label: 'Take profit', unit: '%', cur: tp, cands: uniq(TUNE_FACTORS.map(f => Math.min(10, Math.max(0.2, tuneRound(tp * f, false))))).sort((a, b) => a - b), set: (s, v) => { s.takeProfit = Number(v); } });
+  dims.push({ id: 'sl', label: 'Stop loss', unit: '%', cur: sl, cands: uniq(TUNE_FACTORS.map(f => Math.min(6, Math.max(0.2, tuneRound(sl * f, false))))).sort((a, b) => a - b), set: (s, v) => { s.stopLoss = Number(v); } });
+  let n = 0;
+  (spec.entryConditions || []).forEach((c, i) => {
+    const ind = indicatorById(c.indicator);
+    if (ind.novalue || ind.customEquation) return;
+    const v = String(c.value == null ? '' : c.value).trim();
+    if (!v) return;
+    let cands = null;
+    if (/^\d+\s*\/\s*\d+$/.test(v)) {
+      const [a, b] = v.split('/').map(x => parseInt(x, 10));
+      cands = uniq(TUNE_FACTORS.map(f => { const fa = Math.max(2, Math.round(a * f)), fb = Math.max(fa + 1, Math.round(b * f)); return fa + '/' + fb; }));
+      cands.sort((p, q) => parseInt(p, 10) - parseInt(q, 10));
+    } else {
+      const x = parseFloat(v);
+      if (!isFinite(x) || x === 0) return;
+      const bd = TUNE_BOUNDS[c.indicator], intLike = Math.abs(x) >= 10 || c.indicator === 'breakout' || c.indicator === 'volume';
+      cands = uniq(TUNE_FACTORS.map(f => { let y = tuneRound(x * f, intLike); if (bd) y = Math.min(bd[1], Math.max(bd[0], y)); return String(y); }));
+      cands.sort((p, q) => parseFloat(p) - parseFloat(q));
+    }
+    if (cands.length < 2) return;
+    n++;
+    dims.push({ id: 'c' + i, label: ind.label.replace(/\s*\(.*\)\s*$/, '') + ' setting' + (n > 1 ? ' ' + n : ''), unit: ind.unit || '', cur: v, cands, set: (s, val) => { if (s.entryConditions[i]) s.entryConditions[i].value = String(val); } });
+  });
+  return dims;
+}
+function tuneCombos(dims) {
+  let out = [[]];
+  dims.forEach(d => { const next = []; out.forEach(p => d.cands.forEach((_, k) => next.push(p.concat(k)))); out = next; });
+  return out;
+}
+function tuneMetrics(base, hard, lo, hi) {
+  const a = base.filter(t => t.entryBar >= lo && t.entryBar < hi), h = hard.filter(t => t.entryBar >= lo && t.entryBar < hi);
+  const sum = (l) => l.reduce((x, t) => x + t.pnl, 0);
+  const ret = sum(a) / 100, ret2 = sum(h) / 100;
+  const pos = [0, 1, 2].filter(k => { const l = lo + (hi - lo) * k / 3, u = lo + (hi - lo) * (k + 1) / 3; return sum(a.filter(t => t.entryBar >= l && t.entryBar < u)) > 0; }).length;
+  let eq = 10000, peak = 10000, dd = 0;
+  a.forEach(t => { eq += t.pnl; peak = Math.max(peak, eq); dd = Math.max(dd, (peak - eq) / peak); });
+  return { n: a.length, ret, ret2, pos, dd: dd * 100, win: a.length ? 100 * a.filter(t => t.pnl > 0).length / a.length : 0 };
+}
+function tuneProgress(txt, frac) {
+  const t = document.getElementById('tune-prog-t'), b = document.getElementById('tune-prog-b');
+  if (t) t.textContent = txt; if (b) b.style.width = Math.max(2, Math.round(frac * 100)) + '%';
+}
+async function tuneRun(spec, bars, rtPct, dimIds, tk) {
+  const all = tuneDims(spec), dims = all.filter(d => dimIds.includes(d.id));
+  if (!dims.length) return null;
+  const N = bars.length, split = Math.floor(N * TUNE_SPLIT), seed = spec.symbol + '|' + spec.timeframe + '|tune';
+  const strip = (k, v) => (k === 'backtest' || k === 'tradeLog' || k === '_exprCache') ? undefined : v;
+  const memo = {};
+  const evalSpec = (sp) => {
+    (sp.entryConditions || []).forEach(c => { delete c._exprCache; });
+    const ck = (sp.entryConditions || []).map(c => (c.indicator === 'sma_cross' || c.indicator === 'ema_cross' || c.indicator === 'breakout') ? c.indicator + ':' + c.value : c.indicator).join('|');
+    const cache = memo[ck] || (memo[ck] = buildIndicatorCache(bars, sp.entryConditions));
+    const base = simulateStrategyTrades(sp, bars, cache, seededRandom(seed), rtPct / 100).trades;
+    const hard = simulateStrategyTrades(sp, bars, cache, seededRandom(seed), rtPct * SCREEN_STRESS / 100).trades;
+    return { tune: tuneMetrics(base, hard, 0, split), hold: tuneMetrics(base, hard, split, N + 1) };
+  };
+  const cur = evalSpec(JSON.parse(JSON.stringify(spec, strip)));
+  const combos = tuneCombos(dims), results = [], byKey = new Map();
+  for (let i = 0; i < combos.length; i++) {
+    if (tk && tk.cancel) return null;
+    const sp = JSON.parse(JSON.stringify(spec, strip)), vals = {};
+    dims.forEach((d, j) => { const v = d.cands[combos[i][j]]; vals[d.id] = v; d.set(sp, v); });
+    const m = evalSpec(sp), r = { idx: combos[i], vals, tune: m.tune, hold: m.hold };
+    r.ok = m.tune.n >= TUNE_MIN_TRADES && m.tune.pos >= 2 && m.tune.ret > 0 && m.tune.ret2 > 0;
+    results.push(r); byKey.set(combos[i].join(','), r);
+    if (i % 6 === 5) { tuneProgress(`Testing setting ${i + 1} of ${combos.length}`, (i + 1) / combos.length); await screenTick(); }
+  }
+  // Neighbour smoothing: a setting is scored with the settings one step away on each tuned axis.
+  results.forEach(r => {
+    const vs = [r.tune.ret2];
+    dims.forEach((d, j) => [-1, 1].forEach(s => { const k = r.idx.slice(); k[j] += s; const nb = byKey.get(k.join(',')); if (nb) vs.push(nb.tune.ret2); }));
+    r.smooth = vs.reduce((a, b) => a + b, 0) / vs.length;
+  });
+  const elig = results.filter(r => r.ok).sort((a, b) => b.smooth - a.smooth);
+  const top = elig.slice(0, 3);
+  const enough = results.filter(r => r.tune.n >= TUNE_MIN_TRADES);
+  const heat = (() => {
+    if (dims.length < 2) return null;
+    const A = dims[0], B = dims[1], cells = A.cands.map(() => B.cands.map(() => []));
+    results.forEach(r => { if (r.tune.n >= TUNE_MIN_TRADES) cells[r.idx[0]][r.idx[1]].push(r.tune.ret2); });
+    return { a: A, b: B, v: cells.map(row => row.map(l => l.length ? l.reduce((x, y) => x + y, 0) / l.length : null)) };
+  })();
+  const dimInfo = dims.map(d => ({ id: d.id, label: d.label, unit: d.unit, cur: d.cur, cands: d.cands }));
+  const curVals = {}; dims.forEach(d => { curVals[d.id] = d.cur; });
+  let verdict = 'none';
+  if (top.length) {
+    const h = top[0].hold;
+    if (h.n < 5) verdict = 'few';
+    else if (h.ret <= 0 || h.ret2 <= 0) verdict = 'failed';
+    else if (h.ret <= cur.hold.ret) verdict = 'notbetter';
+    else verdict = 'confirmed';
+  }
+  return { dims: dimInfo, curVals, current: cur, top, tried: results.length, enough: enough.length, eligible: elig.length, profitable: enough.filter(r => r.tune.ret2 > 0).length, heat, verdict, split, bars: N, at: Date.now(), symbol: spec.symbol, timeframe: spec.timeframe, rt: rtPct };
+}
+function tuneRunsKey() { return 'vt_tune_runs:' + (State.user ? State.user.username : ''); }
+function tuneRunsGet(key) { try { return (JSON.parse(localStorage.getItem(tuneRunsKey()) || '{}') || {})[key] || 0; } catch (e) { return 0; } }
+function tuneRunsBump(key) { try { const o = JSON.parse(localStorage.getItem(tuneRunsKey()) || '{}') || {}; o[key] = (o[key] || 0) + 1; localStorage.setItem(tuneRunsKey(), JSON.stringify(o)); } catch (e) {} }
+function tuneState(key) { State.tune = State.tune || {}; return State.tune[key] || (State.tune[key] = { dimIds: null, running: false, cancel: false, result: null }); }
+function tuneSpecFor(key) {
+  if (key.indexOf('row:') === 0) {
+    const row = State.screen && State.screen.rows && State.screen.rows.find(x => x.key === key.slice(4)); if (!row) return null;
+    if (row.kind === 'tpl') { const t = TEMPLATES.find(x => x.name === row.ref); return t ? screenSpec({ kind: 'tpl', t, symbol: row.symbol }) : null; }
+    const s = (State.user.strategies || []).find(x => x.id === row.ref); return s ? screenSpec({ kind: 'mine', s, symbol: row.symbol }) : null;
+  }
+  return (State.user.strategies || []).find(x => x.id === key) || null;
+}
+function tuneSettingsText(dims, vals) { return dims.map(d => `${esc(d.label)} <b class="mono">${esc(String(vals[d.id]))}${d.unit && d.id !== 'tp' && d.id !== 'sl' ? '' : (d.unit || '')}</b>`).join('<br>'); }
+function tuneHeatHtml(r) {
+  if (!r.heat) return '';
+  const h = r.heat, flat = h.v.reduce((a, row) => a.concat(row), []).filter(x => x !== null), mx = Math.max(1, ...flat.map(Math.abs));
+  const cell = (v, i, j) => {
+    const isCur = String(h.a.cands[i]) === String(r.curVals[h.a.id]) && String(h.b.cands[j]) === String(r.curVals[h.b.id]);
+    const picked = r.top[0] && r.top[0].idx[0] === i && r.top[0].idx[1] === j;
+    const bg = v === null ? 'rgba(148,163,184,.12)' : v > 0 ? `rgba(52,211,153,${0.15 + 0.6 * Math.min(1, v / mx)})` : `rgba(251,113,133,${0.15 + 0.6 * Math.min(1, -v / mx)})`;
+    return `<td title="${v === null ? 'Too few trades' : fmtPct(v) + ' with costs doubled (tuning period, averaged over the other settings)'}" style="padding:0;"><div style="min-width:64px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:6px;margin:2px;background:${bg};font-size:11.5px;${isCur ? 'outline:2px solid var(--text);' : ''}${picked ? 'box-shadow:0 0 0 2px var(--brand,#ff4fa3) inset;' : ''}" class="mono">${v === null ? 'n/a' : (v >= 0 ? '+' : '') + v.toFixed(0) + '%'}</div></td>`;
+  };
+  return `<div style="margin:16px 0 6px;font-weight:600;font-size:13px;">How results change across ${esc(h.a.label.toLowerCase())} and ${esc(h.b.label.toLowerCase())}</div>
+    <div class="faint" style="font-size:11.5px;margin-bottom:6px;">Tuning period, with costs doubled. A broad green area means the idea is not fragile; one isolated green cell usually means luck. White outline: your current settings. Pink frame: the first candidate.</div>
+    <div style="overflow-x:auto;"><table style="border-collapse:collapse;"><thead><tr><th class="faint" style="font-size:10.5px;text-align:right;padding-right:8px;">${esc(h.b.label)} ↓ / ${esc(h.a.label)} →</th>${h.a.cands.map(c => `<th class="mono faint" style="font-size:11px;padding:0 4px 4px;">${esc(String(c))}</th>`).join('')}</tr></thead>
+    <tbody>${h.b.cands.map((bc, j) => `<tr><th class="mono faint" style="font-size:11px;text-align:right;padding-right:8px;">${esc(String(bc))}</th>${h.a.cands.map((ac, i) => cell(h.v[i][j], i, j)).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function tuneResultHtml(key, r) {
+  const tk = tuneState(key), runs = tuneRunsGet(key);
+  const msg = {
+    confirmed: ['badge-long', 'Held up on the hold-out', `The hold-out period (the most recent 30%, never used to pick these settings) is profitable after costs, even with costs doubled${r.current.hold.n >= 5 ? ', and beats your current settings there' : ''}. That is encouraging, not proof.`],
+    notbetter: ['badge-info', 'No clear improvement', 'The first candidate is profitable on the hold-out but does not beat your current settings there. Keeping your current settings is reasonable.'],
+    failed: ['badge-short', 'Failed the hold-out', 'The first candidate looked good on the tuning period but loses money on the hold-out. That is what overfitting looks like. Do not apply it.'],
+    few: ['badge-dim', 'Inconclusive', 'The hold-out has too few trades (under 5) to judge. Try a longer timeframe or a symbol with more history.'],
+    none: ['badge-dim', 'Nothing qualified', `No setting had at least ${TUNE_MIN_TRADES} trades, was profitable in 2 of 3 tuning periods, and stayed profitable with costs doubled. The idea may not have an edge on this symbol.`]
+  }[r.verdict];
+  const pc = (x) => `<span style="color:${plColor(x)}">${fmtPct(x)}</span>`;
+  const row = (label, vals, m, apply) => `<tr style="border-top:1px solid var(--border-soft);text-align:right;vertical-align:top;">
+    <td style="text-align:left;padding:9px 8px;font-size:12px;line-height:1.7;"><b>${label}</b><br>${tuneSettingsText(r.dims, vals)}</td>
+    <td class="mono" style="padding:9px 8px;">${m.tune.n}</td><td class="mono" style="padding:9px 8px;">${pc(m.tune.ret)}</td><td class="mono" style="padding:9px 8px;">${pc(m.tune.ret2)}</td><td class="mono" style="padding:9px 8px;">${m.tune.pos} of 3</td>
+    <td class="mono" style="padding:9px 8px;border-left:1px solid var(--border-soft);">${m.hold.n}</td><td class="mono" style="padding:9px 8px;">${m.hold.n >= 5 ? pc(m.hold.ret) : 'N/A'}</td><td class="mono" style="padding:9px 8px;">${m.hold.n >= 5 ? pc(m.hold.ret2) : 'N/A'}</td>
+    <td style="padding:9px 0 9px 8px;text-align:right;white-space:nowrap;">${apply || ''}</td></tr>`;
+  const rows = row('Current settings', r.curVals, r.current, '') + r.top.map((t, i) => row(`Candidate ${i + 1}`, t.vals, t, `<button class="btn ${i === 0 && r.verdict === 'confirmed' ? 'btn-primary' : 'btn-outline'} btn-sm" data-action="tune-apply" data-tkey="${esc(key)}" data-idx="${i}">${r.verdict === 'failed' ? 'Apply anyway' : 'Apply'}</button>`)).join('');
+  return `<div style="margin-top:16px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"><span class="badge ${msg[0]}">${msg[1]}</span><span class="faint" style="font-size:12px;">${r.tried} settings tried · ${r.profitable} of ${r.enough} (with enough trades) profitable with costs doubled · ${r.eligible} qualified</span></div>
+    <div class="muted" style="font-size:13px;line-height:1.6;">${msg[2]}</div>
+    ${r.top[0] && r.dims.some((d, j) => r.top[0].idx[j] === 0 || r.top[0].idx[j] === d.cands.length - 1) ? `<div class="hint" style="margin-top:8px;">The first candidate sits at the edge of the range tested for ${esc(r.dims.filter((d, j) => r.top[0].idx[j] === 0 || r.top[0].idx[j] === d.cands.length - 1).map(d => d.label.toLowerCase()).join(', '))}. A better value may lie outside it, but pushing further is how curve-fitting starts, so only widen the range if the hold-out supports it.</div>` : ''}
+    ${r.enough && r.profitable / r.enough < 0.4 ? `<div class="hint" style="margin-top:8px;color:var(--short);">Fewer than 4 in 10 nearby settings were profitable with costs doubled. That points to a fragile idea, whatever the best cell looks like.</div>` : ''}
+    <div style="overflow-x:auto;margin-top:10px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px;">
+      <thead><tr class="faint" style="font-size:10.5px;text-align:right;"><th></th><th colspan="4" style="padding:4px 8px;">TUNING PERIOD (first ${Math.round(TUNE_SPLIT * 100)}%)</th><th colspan="3" style="padding:4px 8px;border-left:1px solid var(--border-soft);">HOLD-OUT (last ${Math.round((1 - TUNE_SPLIT) * 100)}%)</th><th></th></tr>
+      <tr class="faint" style="font-size:10.5px;text-align:right;"><th style="text-align:left;padding:4px 8px;">SETTINGS</th><th style="padding:4px 8px;">TRADES</th><th style="padding:4px 8px;">RETURN</th><th style="padding:4px 8px;">COSTS x2</th><th style="padding:4px 8px;">PERIODS +</th><th style="padding:4px 8px;border-left:1px solid var(--border-soft);">TRADES</th><th style="padding:4px 8px;">RETURN</th><th style="padding:4px 8px;">COSTS x2</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    ${tuneHeatHtml(r)}
+    <div class="hint" style="margin-top:12px;line-height:1.6;">Ranked on the tuning period only, by return with costs doubled, then averaged with neighbouring settings. The hold-out is shown afterwards and never used to rank. ${runs > 1 ? `<b style="color:var(--short);">This is run ${runs} on this strategy: every earlier run has already shown you its hold-out, so this one is no longer a clean test.</b> ` : ''}With ${r.tried} settings tried, the top one looks better than it is. Trust the hold-out and the green area, not the single best number. Costs: ${r.rt.toFixed(2)}% per round trip. None of this predicts future results.</div>
+  </div>`;
+}
+function tuneBodyHtml(key) {
+  const spec = tuneSpecFor(key), tk = tuneState(key);
+  if (!spec) return `<div class="muted" style="font-size:13px;">That strategy is no longer available.</div>`;
+  if (spec.direction === 'both') return `<div class="muted" style="font-size:13px;line-height:1.6;">A "both" strategy picks long or short at random in backtests, so tuning it would mean nothing. Make a Long and a Short version first.</div>`;
+  const dims = tuneDims(spec);
+  if (!tk.dimIds) tk.dimIds = dims.slice(0, 3).map(d => d.id);
+  tk.dimIds = tk.dimIds.filter(id => dims.some(d => d.id === id));
+  const sel = dims.filter(d => tk.dimIds.includes(d.id)), combos = sel.reduce((a, d) => a * d.cands.length, 1);
+  const pills = dims.map(d => `<button type="button" class="asset-pill ${tk.dimIds.includes(d.id) ? 'on' : ''}" data-action="tune-dim" data-tkey="${esc(key)}" data-dim="${d.id}" ${tk.running ? 'disabled' : ''}>${esc(d.label)} <span class="mono faint" style="font-size:11px;">${esc(String(d.cands[0]))} to ${esc(String(d.cands[d.cands.length - 1]))}${d.id === 'tp' || d.id === 'sl' ? '%' : ''}</span></button>`).join('');
+  const runBtn = tk.running ? `<button class="btn btn-outline btn-sm" data-action="tune-stop" data-tkey="${esc(key)}">Stop</button>` : `<button class="btn btn-primary btn-sm" data-action="tune-run" data-tkey="${esc(key)}" ${sel.length ? '' : 'disabled'}>${icon('target')} ${tk.result ? 'Run again' : 'Run tune'}</button>`;
+  return `<p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 10px;">Tries nearby settings on the <b>first 70%</b> of real price history, ranks them with <b>costs doubled</b> and by how stable they are, then checks the shortlist once on the <b>last 30%</b>, which was never used to choose. Position size is left alone.</p>
+    <div class="pill-group-label">What to tune (pick up to ${TUNE_MAX_DIMS})</div>
+    <div class="asset-pills" style="margin-bottom:10px;">${pills}</div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><span class="faint" style="font-size:12px;">${combos} settings to test${combos > 400 ? ', this will take a little while' : ''}</span>${runBtn}</div>
+    ${tk.running ? `<div style="margin:12px 0 4px;"><div id="tune-prog-t" class="muted" style="font-size:13px;margin-bottom:6px;">Loading price history…</div><div style="height:8px;border-radius:5px;background:rgba(148,163,184,.2);"><div id="tune-prog-b" style="height:100%;width:2%;border-radius:5px;background:var(--brand,#ff4fa3);transition:width .2s;"></div></div></div>` : ''}
+    ${!tk.running && tk.result ? tuneResultHtml(key, tk.result) : ''}`;
+}
+function renderTunePanel(s) {
+  if (!s || !s.entryConditions || !s.entryConditions.length) return '';
+  return `<div class="panel panel-pad" style="margin-bottom:16px;"><div class="panel-head"><h3>${icon('target')} Tune settings <span class="badge badge-info" style="margin-left:6px;">Hold-out tested</span></h3></div>${tuneBodyHtml(s.id)}</div>`;
+}
+function renderTuneModal(m) {
+  const spec = tuneSpecFor(m.tkey);
+  return `<div class="modal-overlay" data-action="close-modal"><div class="modal" style="max-width:940px;width:94vw;max-height:90vh;overflow:auto;" data-action="noop">
+    <h3>${icon('target')} Tune${spec ? ': ' + esc(spec.name) : ''}</h3>
+    <div class="sub">${spec ? esc(spec.symbol) + ' · ' + esc(spec.timeframe) + ' · ' + esc(spec.direction) : ''}</div>
+    ${tuneBodyHtml(m.tkey)}
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-action="close-modal">Close</button></div></div></div>`;
+}
+async function tuneStart(key) {
+  const tk = tuneState(key), spec = tuneSpecFor(key);
+  if (!spec || tk.running) return;
+  tk.running = true; tk.cancel = false; tk.result = null; render();
+  await loadRealBars(spec.symbol, spec.timeframe);
+  const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
+  if (!hit || !hit.bars || hit.bars.length < 150) { tk.running = false; render(); toast('Real price history is not available for this symbol and timeframe, so it cannot be tuned.', 'err'); return; }
+  const c = backtestCosts(), rt = 2 * (c.feePct + c.slipPct);
+  let res = null; try { res = await tuneRun(spec, hit.bars, rt, tk.dimIds, tk); } catch (e) { console.error(e); }
+  const stopped = tk.cancel; tk.running = false; tk.cancel = false;
+  if (res) { tk.result = res; tuneRunsBump(key); }
+  render();
+  if (res) toast('Tune finished. Check the hold-out column before applying anything.', 'ok'); else if (!stopped) toast('Tune could not run for this strategy.', 'err');
+}
+async function tuneApply(key, idx) {
+  const tk = tuneState(key), r = tk.result; if (!r || !r.top[idx]) return;
+  const vals = r.top[idx].vals; let st = null;
+  if (key.indexOf('row:') === 0) {
+    const row = State.screen && State.screen.rows.find(x => x.key === key.slice(4)); if (!row) return;
+    st = await screenMaterialize(row); if (!st) return;
+  } else st = (State.user.strategies || []).find(x => x.id === key);
+  if (!st) return;
+  tuneDims(st).forEach(d => { if (vals[d.id] !== undefined) d.set(st, vals[d.id]); });
+  (st.entryConditions || []).forEach(c => { delete c._exprCache; });
+  await loadRealBars(st.symbol, st.timeframe);
+  if (!applyBacktest(st, st.id)) { toast(st.backtestError || 'No real price history is available for this instrument.', 'err'); return; }
+  logActivity('backtest', `Applied tuned settings to "${st.name}"`);
+  await saveUser();
+  if (State.optimizeCache) delete State.optimizeCache[st.id]; if (State.mcCache) delete State.mcCache[st.id];
+  State.user.hasOptimized = true; delete State.tune[key];
+  State.modal = null; State.detailId = st.id; State.view = 'detail'; window.scrollTo(0, 0); render();
+  toast('Tuned settings applied and backtest re-run. Run Monte Carlo and demo trade before trusting them.', 'ok'); checkAchievements();
+}
+
+/* ---- Tune many: batch tuning of screener results ---- */
+const TUNE_BATCH_OPTS = [10, 25, 50, 100, 'all'];
+function tuneBatchState() { return State.tuneBatch || (State.tuneBatch = { n: 25, running: false, cancel: false, out: [], done: 0, total: 0 }); }
+function tuneBatchCandidates() {
+  const sc = State.screen; if (!sc || !sc.rows) return [];
+  return sc.rows.filter(r => (r.verdict === 'Passes' || r.verdict === 'Marginal') && r.dir !== 'both' && r.ret2 !== undefined).sort((a, b) => b.ret2 - a.ret2);
+}
+function tuneBatchProgress(txt, frac) {
+  const t = document.getElementById('tb-prog-t'), b = document.getElementById('tb-prog-b');
+  if (t) t.textContent = txt; if (b) b.style.width = Math.max(2, Math.round(frac * 100)) + '%';
+}
+function tuneBatchPaint() { const el = document.getElementById('tb-panel'); if (el) el.innerHTML = tuneBatchInner(); }
+async function tuneBatchStart() {
+  const tb = tuneBatchState(); if (tb.running) return;
+  if (State.screen && State.screen.running) { toast('Wait for the screener to finish first.', 'info'); return; }
+  const cand = tuneBatchCandidates(), take = tb.n === 'all' ? cand : cand.slice(0, tb.n);
+  if (!take.length) { toast('No passing or marginal strategies to tune. Run the screener first.', 'info'); return; }
+  Object.assign(tb, { running: true, cancel: false, out: [], done: 0, total: take.length, started: Date.now(), finished: null }); tuneBatchPaint();
+  const c = backtestCosts(), rt = 2 * (c.feePct + c.slipPct);
+  for (let i = 0; i < take.length && !tb.cancel; i++) {
+    const row = take[i], key = 'row:' + row.key, spec = tuneSpecFor(key);
+    tuneBatchProgress(`Tuning ${i + 1} of ${take.length}: ${row.name} on ${row.symbol}`, i / take.length);
+    const o = { key: row.key, name: row.name, symbol: row.symbol, tf: row.tf, dir: row.dir, verdict: 'nodata' };
+    try {
+      if (spec) {
+        await loadRealBars(spec.symbol, spec.timeframe);
+        const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
+        if (hit && hit.bars && hit.bars.length >= 150) {
+          const tk = tuneState(key); if (!tk.dimIds) tk.dimIds = tuneDims(spec).slice(0, 3).map(d => d.id);
+          const res = await tuneRun(spec, hit.bars, rt, tk.dimIds, tb);
+          if (res) {
+            tk.result = res; tuneRunsBump(key);
+            const t0 = res.top[0];
+            Object.assign(o, { verdict: res.verdict, dims: res.dims, curHold: res.current.hold, bestHold: t0 ? t0.hold : null, vals: t0 ? t0.vals : null, curVals: res.curVals, strong: res.verdict === 'confirmed' && t0.hold.n >= 10 });
+          }
+        }
+      }
+    } catch (e) { console.error(e); }
+    if (tb.cancel && o.verdict === 'nodata') break;
+    tb.out.push(o); tb.done = i + 1;
+    await screenTick();
+  }
+  tb.running = false; tb.finished = Date.now(); const stopped = tb.cancel; tb.cancel = false;
+  tuneBatchPaint();
+  toast(stopped ? 'Stopped. Results so far are shown.' : 'Tuning finished. Only the Confirmed rows improved on held-back history.', stopped ? 'info' : 'ok');
+}
+function tuneBatchInner() {
+  const tb = tuneBatchState(), cand = tuneBatchCandidates();
+  const nTake = tb.n === 'all' ? cand.length : Math.min(tb.n, cand.length);
+  const opts = TUNE_BATCH_OPTS.map(o => `<option value="${o}" ${String(tb.n) === String(o) ? 'selected' : ''}>${o === 'all' ? 'All passing and marginal (' + cand.length + ')' : 'Top ' + o}</option>`).join('');
+  const runBtn = tb.running ? `<button class="btn btn-outline btn-sm" data-action="tb-stop">Stop</button>` : `<button class="btn btn-primary btn-sm" data-action="tb-run" ${cand.length ? '' : 'disabled'}>${icon('target')} ${tb.out.length ? 'Tune again' : 'Tune many'}</button>`;
+  const prog = tb.running ? `<div style="margin:10px 0 4px;"><div id="tb-prog-t" class="muted" style="font-size:13px;margin-bottom:6px;">Starting…</div><div style="height:8px;border-radius:5px;background:rgba(148,163,184,.2);"><div id="tb-prog-b" style="height:100%;width:2%;border-radius:5px;background:var(--brand,#ff4fa3);transition:width .2s;"></div></div></div>` : '';
+  let res = '';
+  if (!tb.running && tb.out.length) {
+    const cnt = v => tb.out.filter(o => o.verdict === v).length, strong = tb.out.filter(o => o.strong).length;
+    const badge = { confirmed: ['badge-long', 'Confirmed'], notbetter: ['badge-dim', 'Not better'], failed: ['badge-short', 'Failed hold-out'], few: ['badge-dim', 'Too few trades'], none: ['badge-dim', 'Nothing qualified'], nodata: ['badge-dim', 'No data'] };
+    const order = { confirmed: 0, notbetter: 1, few: 2, failed: 3, none: 4, nodata: 5 };
+    const rows = tb.out.slice().sort((a, b) => (order[a.verdict] - order[b.verdict]) || ((b.bestHold ? b.bestHold.ret : -9999) - (a.bestHold ? a.bestHold.ret : -9999)));
+    const body = rows.map(o => {
+      const b = badge[o.verdict] || badge.nodata, can = o.verdict === 'confirmed' || o.verdict === 'notbetter' || o.verdict === 'failed' || o.verdict === 'few';
+      const settings = o.vals && o.dims ? tuneSettingsText(o.dims, o.vals) : '<span class="faint">none</span>';
+      return `<tr style="border-top:1px solid var(--border-soft);text-align:right;vertical-align:top;">
+        <td style="text-align:left;padding:9px 8px;"><b>${esc(o.name)}</b><div class="faint" style="font-size:11px;">${esc(o.symbol)} · ${esc(o.tf)} · ${esc(o.dir)}</div></td>
+        <td class="mono" style="padding:9px 8px;color:${o.curHold ? plColor(o.curHold.ret) : 'inherit'}">${o.curHold ? fmtPct(o.curHold.ret) : 'N/A'}<div class="faint" style="font-size:10.5px;">${o.curHold ? o.curHold.n + ' trades' : ''}</div></td>
+        <td class="mono" style="padding:9px 8px;color:${o.bestHold ? plColor(o.bestHold.ret) : 'inherit'}">${o.bestHold ? fmtPct(o.bestHold.ret) : 'N/A'}<div class="faint" style="font-size:10.5px;">${o.bestHold ? o.bestHold.n + ' trades' : ''}</div></td>
+        <td style="padding:9px 8px;text-align:left;font-size:12px;line-height:1.5;">${settings}</td>
+        <td style="padding:9px 8px;text-align:left;"><span class="badge ${b[0]}">${b[1]}</span>${o.strong ? ' <span class="badge badge-info">10+ trades</span>' : ''}</td>
+        <td style="padding:9px 0 9px 8px;white-space:nowrap;text-align:right;">${can ? `<button class="btn btn-ghost btn-sm" data-action="tune-open" data-key="${esc(o.key)}">Details</button>` : ''}${o.verdict === 'confirmed' ? ` <button class="btn btn-primary btn-sm" data-action="tune-apply" data-tkey="row:${esc(o.key)}" data-idx="0">Apply</button>` : ''}</td></tr>`;
+    }).join('');
+    res = `<div style="font-size:13px;margin:12px 0 4px;"><b>${cnt('confirmed')}</b> of ${tb.out.length} improved on held-back history (<b>${strong}</b> with 10 or more trades there) · ${cnt('failed')} failed the hold-out · ${cnt('none') + cnt('few')} had nothing solid to apply${tb.finished ? ` · <span class="faint">${new Date(tb.finished).toLocaleTimeString()}</span>` : ''}</div>
+      <div class="faint" style="font-size:11.5px;line-height:1.55;margin-bottom:8px;">The more strategies you tune, the more likely a few look better by luck, even on held-back history. Prefer rows with 10 or more hold-out trades, then run Monte Carlo and demo trade before trusting any of them. Tuned settings are only applied when you press Apply.</div>
+      <div style="overflow:auto;max-height:460px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:860px;"><thead><tr class="faint" style="font-size:10.5px;position:sticky;top:0;background:var(--panel);z-index:1;"><th style="text-align:left;padding:6px 8px 8px;">STRATEGY</th><th style="text-align:right;padding:6px 8px 8px;">HOLD-OUT NOW</th><th style="text-align:right;padding:6px 8px 8px;">HOLD-OUT TUNED</th><th style="text-align:left;padding:6px 8px 8px;">BEST SETTINGS</th><th style="text-align:left;padding:6px 8px 8px;">RESULT</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+  return `<div class="panel-head"><h3>${icon('target')} Tune many <span class="badge badge-info" style="margin-left:6px;">Hold-out tested</span></h3></div>
+    <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 10px;">Runs Tune on the best passing and marginal results in one go: take profit, stop loss and the first condition value, checked on the last 30% of history that was never used to choose. Nothing is changed until you press Apply on a row.</p>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><select class="input" data-field="tb-n" style="max-width:300px;" ${tb.running ? 'disabled' : ''}>${opts}</select><span class="faint" style="font-size:12px;">${cand.length ? nTake + ' strateg' + (nTake === 1 ? 'y' : 'ies') + ' to tune' : 'Nothing passing or marginal yet'}</span>${runBtn}</div>${prog}${res}`;
+}
+function renderTuneBatchPanel() { return `<div id="tb-panel" class="panel panel-pad" style="margin:0 0 14px;background:var(--panel-2,rgba(255,255,255,.03));">${tuneBatchInner()}</div>`; }
+
+/* =============================== PORTFOLIO BUILDER ================================
+   Multi-asset allocation, inspired by the weekly multi-period selection approach in
+   "An Approach for a Multi-Period Portfolio" (Aburto et al.): choose a small set of assets,
+   re-balance on a schedule, charge transaction costs, and buy whole shares only.
+   What it is NOT: the paper uses LSTM forecasts and GARCH risk. This uses plain statistics
+   (EWMA mean shrunk toward the group average, EWMA covariance shrunk toward its diagonal),
+   which are simpler and harder to over-fit. The paper's 62.28% result is not reproduced here. */
+/* PB-MATH-START */
+function pbReturns(closes) { const r = []; for (let i = 1; i < closes.length; i++) r.push(closes[i] / closes[i - 1] - 1); return r; }
+// R is a T x N matrix of simple returns, newest row last. Returns { mu (per day), cov }.
+function pbEstimate(R, halfLife, shrink) {
+  const T = R.length, N = R[0].length, lam = Math.pow(0.5, 1 / (halfLife || 20));
+  const wts = []; let ws = 0; for (let t = 0; t < T; t++) { const w = Math.pow(lam, T - 1 - t); wts.push(w); ws += w; }
+  const m = new Array(N).fill(0);
+  for (let t = 0; t < T; t++) for (let j = 0; j < N; j++) m[j] += wts[t] * R[t][j] / ws;
+  const avg = m.reduce((a, b) => a + b, 0) / N, sh = shrink === undefined ? 0.5 : shrink;
+  const mu = m.map(x => sh * avg + (1 - sh) * x);
+  const cov = []; for (let i = 0; i < N; i++) cov.push(new Array(N).fill(0));
+  for (let t = 0; t < T; t++) for (let i = 0; i < N; i++) { const di = R[t][i] - m[i]; for (let j = i; j < N; j++) cov[i][j] += wts[t] * di * (R[t][j] - m[j]) / ws; }
+  for (let i = 0; i < N; i++) for (let j = 0; j < i; j++) cov[i][j] = cov[j][i];
+  const dshr = 0.2; for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (i !== j) cov[i][j] *= (1 - dshr);
+  for (let i = 0; i < N; i++) cov[i][i] = Math.max(cov[i][i], 1e-10);
+  return { mu, cov };
+}
+// Project v onto { w >= 0, sum w = 1, w <= cap } by bisection on the shift tau.
+function pbProject(v, cap) {
+  const n = v.length; let lo = Math.min(...v) - cap - 1, hi = Math.max(...v) + 1;
+  for (let k = 0; k < 60; k++) { const tau = (lo + hi) / 2; let s = 0; for (let i = 0; i < n; i++) s += Math.min(cap, Math.max(0, v[i] - tau)); if (s > 1) lo = tau; else hi = tau; }
+  const tau = (lo + hi) / 2; return v.map(x => Math.min(cap, Math.max(0, x - tau)));
+}
+function pbVar(w, cov) { let s = 0; for (let i = 0; i < w.length; i++) { if (!w[i]) continue; for (let j = 0; j < w.length; j++) s += w[i] * w[j] * cov[i][j]; } return s; }
+// Maximise  mu.w - (g/2) w'Cw - c*|w - w0|  over the capped simplex by projected sub-gradient steps, for several g,
+// then keep the g with the best cost-adjusted Sharpe (or the lowest risk for 'minvol').
+function pbOptimize(mu, cov, w0, cap, costRate, objective, rebalDays) {
+  const n = mu.length; let tr = 0; for (let i = 0; i < n; i++) tr += cov[i][i];
+  const gams = objective === 'minvol' ? [1e6] : [20, 60, 150, 400, 1200, 4000];
+  let best = null;
+  for (const g of gams) {
+    const L = g * tr + 1e-9, step = 1 / L; let w = w0.slice(); if (Math.abs(w.reduce((a, b) => a + b, 0) - 1) > 1e-6) w = new Array(n).fill(1 / n); w = pbProject(w, cap);
+    for (let it = 0; it < 160; it++) {
+      const grad = new Array(n);
+      for (let i = 0; i < n; i++) { let cw = 0; for (let j = 0; j < n; j++) cw += cov[i][j] * w[j]; const d = w[i] - w0[i]; grad[i] = mu[i] - g * cw - costRate * (d > 1e-9 ? 1 : d < -1e-9 ? -1 : 0); }
+      w = pbProject(w.map((x, i) => x + step * grad[i]), cap);
+    }
+    const vol = Math.sqrt(pbVar(w, cov)); let m = 0, turn = 0; for (let i = 0; i < n; i++) { m += mu[i] * w[i]; turn += Math.abs(w[i] - w0[i]); }
+    const score = objective === 'minvol' ? -vol : (m - costRate * turn / Math.max(1, rebalDays || 5)) / Math.max(vol, 1e-9);
+    if (!best || score > best.score) best = { w, score };
+  }
+  return best.w;
+}
+// Pick at most K assets. Optimise on everything, keep the K largest weights, optimise again on those only.
+function pbSelect(mu, cov, w0, K, capFrac, costRate, objective, rebalDays) {
+  const n = mu.length, cap0 = Math.max(capFrac, 1 / Math.min(n, K) + 1e-6);
+  let w = pbOptimize(mu, cov, w0, Math.min(1, cap0), costRate, objective, rebalDays);
+  if (n <= K) return w;
+  const keep = w.map((x, i) => [x, i]).sort((a, b) => b[0] - a[0]).slice(0, K).map(p => p[1]).sort((a, b) => a - b);
+  const mu2 = keep.map(i => mu[i]), cov2 = keep.map(i => keep.map(j => cov[i][j])), w02 = keep.map(i => w0[i]);
+  const s0 = w02.reduce((a, b) => a + b, 0), w0n = s0 > 1e-9 ? w02.map(x => x / s0) : new Array(keep.length).fill(1 / keep.length);
+  const w2 = pbOptimize(mu2, cov2, w0n, Math.min(1, cap0), costRate, objective, rebalDays);
+  const out = new Array(n).fill(0); keep.forEach((i, k) => { out[i] = w2[k]; }); return out;
+}
+// Whole shares only. Floor every position, then spend leftover cash on the most under-weight asset that still fits.
+function pbShares(w, prices, capital) {
+  const n = w.length, sh = w.map((x, i) => Math.floor(x * capital / prices[i])); let cash = capital - sh.reduce((a, s, i) => a + s * prices[i], 0);
+  for (let guard = 0; guard < 10000; guard++) {
+    let bi = -1, bg = 0;
+    for (let i = 0; i < n; i++) { if (w[i] <= 0 || prices[i] > cash) continue; const gap = w[i] * capital - sh[i] * prices[i]; if (gap > bg) { bg = gap; bi = i; } }
+    if (bi < 0 || bg < prices[bi] * 0.5) break; sh[bi]++; cash -= prices[bi];
+  }
+  return { shares: sh, cash };
+}
+function pbStats(curve) {
+  const n = curve.length; if (n < 3) return { ret: 0, cagr: 0, vol: 0, sharpe: 0, maxDD: 0 };
+  const r = []; for (let i = 1; i < n; i++) r.push(curve[i] / curve[i - 1] - 1);
+  const mean = r.reduce((a, b) => a + b, 0) / r.length, sd = Math.sqrt(r.reduce((a, b) => a + (b - mean) * (b - mean), 0) / Math.max(1, r.length - 1));
+  let pk = curve[0], dd = 0; for (const v of curve) { pk = Math.max(pk, v); dd = Math.min(dd, v / pk - 1); }
+  const yrs = r.length / 252, ret = curve[n - 1] / curve[0] - 1;
+  return { ret, cagr: yrs > 0 ? Math.pow(Math.max(curve[n - 1] / curve[0], 1e-9), 1 / yrs) - 1 : 0, vol: sd * Math.sqrt(252), sharpe: sd > 0 ? mean / sd * Math.sqrt(252) : 0, maxDD: dd };
+}
+// closes: array (per asset) of equally long close arrays. Walk forward: at each rebalance use ONLY earlier bars.
+function pbWalkForward(closes, P) {
+  const N = closes.length, T = closes[0].length, lb = P.lookback, rb = P.rebalDays, cr = P.costBps / 1e4;
+  const costRate = cr; // cost per unit of turnover (one-way)
+  const R = []; for (let t = 1; t < T; t++) R.push(closes.map(c => c[t] / c[t - 1] - 1)); // R[t-1] = return from bar t-1 to t
+  let eq = 1, eqEW = 1, w = new Array(N).fill(0), wEW = new Array(N).fill(0);
+  const curve = [1], curveEW = [1], turns = [], holds = [], dates = [lb];
+  for (let t = lb; t < T - 1; t += rb) {
+    const win = R.slice(t - lb, t); // returns up to bar t (known at the close of bar t)
+    const { mu, cov } = pbEstimate(win, P.halfLife || 20, 0.5);
+    const tgt = pbSelect(mu, cov, w, P.maxHold, P.maxW, costRate, P.objective, rb);
+    let turn = 0; for (let i = 0; i < N; i++) turn += Math.abs(tgt[i] - w[i]);
+    eq *= 1 - turn * cr; turns.push(turn); holds.push(tgt.filter(x => x > 0.005).length);
+    w = tgt;
+    const end = Math.min(T - 1, t + rb);
+    let hold = w.slice(), holdEW = new Array(N).fill(1 / N);
+    // The equal-weight benchmark pays to get back to equal parts (the first purchase costs the full amount).
+    { let tn = 0; for (let i = 0; i < N; i++) tn += Math.abs(1 / N - wEW[i]); eqEW *= 1 - tn * cr; }
+    let gv = hold.slice(), gvEW = holdEW.slice();
+    for (let k = t; k < end; k++) {
+      const rr = R[k]; let s = 0, sEW = 0;
+      for (let i = 0; i < N; i++) { gv[i] *= 1 + rr[i]; gvEW[i] *= 1 + rr[i]; s += gv[i]; sEW += gvEW[i]; }
+      const cash = 1 - hold.reduce((a, b) => a + b, 0); // any unallocated part stays in cash
+      curve.push(eq * (s + cash)); curveEW.push(eqEW * sEW);
+      dates.push(k + 1);
+    }
+    const lastS = gv.reduce((a, b) => a + b, 0) + (1 - hold.reduce((a, b) => a + b, 0)); eq *= lastS;
+    const lastSE = gvEW.reduce((a, b) => a + b, 0); eqEW *= lastSE;
+    w = gv.map(x => x / lastS); wEW = gvEW.map(x => x / lastSE);
+  }
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+  return { curve, curveEW, dates, stats: pbStats(curve), statsEW: pbStats(curveEW), avgTurnover: avg(turns), avgHoldings: avg(holds), rebalances: turns.length };
+}
+// The current allocation, from all data up to the latest bar.
+function pbNow(closes, P, prevW) {
+  const N = closes.length, T = closes[0].length, win = []; for (let t = Math.max(1, T - P.lookback); t < T; t++) win.push(closes.map(c => c[t] / c[t - 1] - 1));
+  const { mu, cov } = pbEstimate(win, P.halfLife || 20, 0.5);
+  const w = pbSelect(mu, cov, prevW || new Array(N).fill(0), P.maxHold, P.maxW, P.costBps / 1e4, P.objective, P.rebalDays);
+  return { w, mu, vol: Math.sqrt(pbVar(w, cov)) * Math.sqrt(252) };
+}
+/* PB-MATH-END */
+const PB = { symbols: 'SPY, QQQ, IWM, TLT, GLD, XLE, XLF, XLV, XLK, EEM', capital: 10000, maxHold: 5, maxW: 40, lookback: 60, rebalDays: 5, costBps: 10, objective: 'sharpe', running: false, progress: '', error: '', result: null };
+function pbParseSymbols() { const seen = {}; return String(PB.symbols || '').split(/[\s,;]+/).map(s => s.trim().toUpperCase()).filter(s => /^[A-Z.]{1,8}$/.test(s) && !seen[s] && (seen[s] = 1)).slice(0, 15); }
+function pbAlignByDate(barsBySym) {
+  const dayKey = t => new Date(t).toISOString().slice(0, 10);
+  const maps = barsBySym.map(b => { const m = new Map(); b.forEach(x => m.set(dayKey(x.t), x.close)); return m; });
+  let days = [...maps[0].keys()].filter(d => maps.every(m => m.has(d))).sort();
+  return { days, closes: maps.map(m => days.map(d => m.get(d))) };
+}
+async function pbRun() {
+  if (PB.running) return;
+  const syms = pbParseSymbols();
+  PB.error = ''; PB.result = null;
+  if (syms.length < 3) { PB.error = 'Enter at least 3 symbols (up to 15), separated by commas.'; render(); return; }
+  PB.running = true; render();
+  try {
+    const got = [], dropped = [];
+    for (let i = 0; i < syms.length; i++) {
+      PB.progress = `Loading daily history ${i + 1} of ${syms.length}: ${syms[i]}`; pbPaint();
+      const r = await loadRealBars(syms[i], '1D');
+      if (r && r.bars && r.bars.length >= PB.lookback + 60) got.push({ sym: syms[i], bars: r.bars, source: r.source }); else dropped.push(syms[i]);
+    }
+    if (got.length < 3) { PB.error = 'Not enough real daily history for at least 3 of those symbols' + (dropped.length ? ' (no usable data for ' + dropped.join(', ') + ')' : '') + '. Real price data needs the VaticTrader backend.'; return; }
+    PB.progress = 'Running the walk-forward test...'; pbPaint(); await new Promise(r => setTimeout(r, 30));
+    const al = pbAlignByDate(got.map(g => g.bars));
+    if (al.days.length < PB.lookback + 60) { PB.error = `Only ${al.days.length} trading days are shared by all of those symbols. Remove the youngest one or lower the look-back.`; return; }
+    const P = { lookback: Math.max(20, Math.min(250, PB.lookback)), rebalDays: Math.max(1, Math.min(60, PB.rebalDays)), costBps: Math.max(0, PB.costBps), maxHold: Math.max(1, Math.min(got.length, PB.maxHold)), maxW: Math.max(5, Math.min(100, PB.maxW)) / 100, objective: PB.objective, halfLife: 20 };
+    const wf = pbWalkForward(al.closes, P);
+    const now = pbNow(al.closes, P, null);
+    const prices = al.closes.map(c => c[c.length - 1]);
+    const sh = pbShares(now.w, prices, Math.max(0, PB.capital));
+    PB.result = { syms: got.map(g => g.sym), dropped, source: got[0].source, days: al.days, P, wf, now, prices, sh, capital: PB.capital, at: Date.now() };
+  } catch (e) { PB.error = 'Could not build the portfolio: ' + (e && e.message ? e.message : 'unknown error'); }
+  finally { PB.running = false; PB.progress = ''; render(); }
+}
+function pbPaint() { const el = document.getElementById('pb-progress'); if (el) el.textContent = PB.progress; }
+function pbChartSvg(a, b) {
+  const W = 760, H = 220, pad = 34, all = a.concat(b), lo = Math.min(...all), hi = Math.max(...all), n = Math.max(a.length, b.length);
+  const X = i => pad + (W - pad - 8) * i / Math.max(1, n - 1), Y = v => H - 22 - (H - 40) * (v - lo) / Math.max(1e-9, hi - lo);
+  const path = arr => arr.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:260px;" role="img" aria-label="Growth of 1 unit: portfolio vs equal weight">
+    <line x1="${pad}" y1="${Y(1)}" x2="${W - 8}" y2="${Y(1)}" stroke="var(--border-soft)" stroke-dasharray="3 4"/>
+    <path d="${path(b)}" fill="none" stroke="#9BA3B4" stroke-width="1.6"/><path d="${path(a)}" fill="none" stroke="var(--brand,#5B8DEF)" stroke-width="2.2"/>
+    <text x="${pad}" y="14" fill="currentColor" font-size="11" opacity=".7">${hi.toFixed(2)}x</text><text x="${pad}" y="${H - 6}" fill="currentColor" font-size="11" opacity=".7">${lo.toFixed(2)}x</text></svg>`;
+}
+function pbCsv() {
+  const r = PB.result; if (!r) return '';
+  const rows = [['symbol', 'weight_pct', 'price', 'shares', 'value']]; r.syms.forEach((s, i) => { if (r.now.w[i] > 0.0005) rows.push([s, (r.now.w[i] * 100).toFixed(2), r.prices[i].toFixed(2), r.sh.shares[i], (r.sh.shares[i] * r.prices[i]).toFixed(2)]); });
+  rows.push(['CASH', '', '', '', r.sh.cash.toFixed(2)]); return rows.map(x => x.join(',')).join('\n');
+}
+function pbView() {
+  const r = PB.result, f = (id, label, val, extra) => `<div class="field" style="margin:0;"><label>${label}</label><input class="input" data-field="pb-${id}" ${extra || ''} value="${esc(String(val))}"></div>`;
+  const inputs = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end;">
+    ${f('capital', 'Starting amount ($)', PB.capital, 'type="number" min="100" step="100"')}${f('maxHold', 'Hold at most (assets)', PB.maxHold, 'type="number" min="1" max="15"')}${f('maxW', 'Max per asset (%)', PB.maxW, 'type="number" min="5" max="100"')}
+    ${f('lookback', 'Look-back (days)', PB.lookback, 'type="number" min="20" max="250"')}${f('rebalDays', 'Re-balance every (days)', PB.rebalDays, 'type="number" min="1" max="60"')}${f('costBps', 'Cost per trade (bps)', PB.costBps, 'type="number" min="0" max="200"')}
+    <div class="field" style="margin:0;"><label>Goal</label><select class="input" data-field="pb-objective"><option value="sharpe" ${PB.objective === 'sharpe' ? 'selected' : ''}>Best return / risk</option><option value="minvol" ${PB.objective === 'minvol' ? 'selected' : ''}>Lowest risk</option></select></div></div>
+    <div class="field" style="margin:12px 0 0;"><label>Assets to choose from (3 to 15 tickers, comma separated)</label><input class="input" data-field="pb-symbols" value="${esc(PB.symbols)}" autocomplete="off"></div>`;
+  let out = '';
+  if (r) {
+    const a = r.wf.stats, b = r.wf.statsEW, pc = v => fmtPct(v * 100), pv = v => (v * 100).toFixed(2) + '%', beat = a.sharpe > b.sharpe;
+    const rows = r.syms.map((s, i) => ({ s, w: r.now.w[i], i })).filter(x => x.w > 0.0005).sort((x, y) => y.w - x.w);
+    out = `<div class="panel panel-pad" style="margin-top:14px;">
+      <div class="panel-head"><h3>${icon('chartBars')} Walk-forward test</h3><span class="badge badge-dim">${r.days.length} shared days · ${r.wf.rebalances} re-balances · ${esc(r.source === 'alpaca' ? 'Alpaca' : 'Yahoo Finance')} data</span></div>
+      <p class="muted" style="font-size:12.5px;line-height:1.6;margin:0 0 8px;">At every re-balance the model only sees earlier days, picks up to ${r.P.maxHold} assets, and pays ${r.P.costBps} bps on everything it trades. The grey line is the same assets held in equal parts and re-balanced on the same schedule.</p>
+      ${pbChartSvg(r.wf.curve, r.wf.curveEW)}
+      <div style="display:flex;gap:14px;font-size:12px;margin:4px 0 10px;"><span><i style="display:inline-block;width:14px;height:3px;background:var(--brand,#5B8DEF);vertical-align:middle;"></i> Model portfolio</span><span><i style="display:inline-block;width:14px;height:3px;background:#9BA3B4;vertical-align:middle;"></i> Equal weight</span></div>
+      <div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px;"><thead><tr class="faint" style="font-size:10.5px;text-align:right;"><th style="text-align:left;padding:6px 8px;"></th><th style="padding:6px 8px;">Total return</th><th style="padding:6px 8px;">Per year</th><th style="padding:6px 8px;">Volatility</th><th style="padding:6px 8px;">Return / risk</th><th style="padding:6px 8px;">Worst drop</th></tr></thead><tbody>
+        <tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;"><b>Model portfolio</b></td><td class="mono" style="padding:8px;color:${plColor(a.ret)}">${pc(a.ret)}</td><td class="mono" style="padding:8px;">${pc(a.cagr)}</td><td class="mono" style="padding:8px;">${pv(a.vol)}</td><td class="mono" style="padding:8px;">${a.sharpe.toFixed(2)}</td><td class="mono" style="padding:8px;color:var(--short);">${pc(a.maxDD)}</td></tr>
+        <tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;">Equal weight</td><td class="mono" style="padding:8px;color:${plColor(b.ret)}">${pc(b.ret)}</td><td class="mono" style="padding:8px;">${pc(b.cagr)}</td><td class="mono" style="padding:8px;">${pv(b.vol)}</td><td class="mono" style="padding:8px;">${b.sharpe.toFixed(2)}</td><td class="mono" style="padding:8px;color:var(--short);">${pc(b.maxDD)}</td></tr></tbody></table></div>
+      <div class="v3-warn ${beat ? '' : 'warn'}" style="margin-top:10px;font-size:12.5px;line-height:1.55;">${icon(beat ? 'check' : 'alertTriangle')}<span>${beat ? 'On this history the model had a better return per unit of risk than equal weight. That is one history, with assets you picked knowing how they turned out, so treat it as a hint, not a result.' : 'On this history the model did not beat simple equal weight on return per unit of risk. That is common: equal weight is hard to beat after costs.'} Average turnover per re-balance: ${(r.wf.avgTurnover * 100).toFixed(0)}% of the portfolio, average holdings: ${r.wf.avgHoldings.toFixed(1)}.</span></div>
+    </div>
+    <div class="panel panel-pad" style="margin-top:14px;">
+      <div class="panel-head"><h3>${icon('layers')} Model allocation for the latest close</h3><button class="btn btn-outline btn-sm" data-action="pb-csv">Copy as CSV</button></div>
+      <div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:480px;"><thead><tr class="faint" style="font-size:10.5px;text-align:right;"><th style="text-align:left;padding:6px 8px;">Asset</th><th style="padding:6px 8px;">Weight</th><th style="padding:6px 8px;">Price</th><th style="padding:6px 8px;">Whole shares</th><th style="padding:6px 8px;">Amount</th></tr></thead><tbody>
+      ${rows.map(x => `<tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;"><b>${esc(x.s)}</b></td><td class="mono" style="padding:8px;">${(x.w * 100).toFixed(1)}%</td><td class="mono" style="padding:8px;">$${r.prices[x.i].toFixed(2)}</td><td class="mono" style="padding:8px;">${r.sh.shares[x.i]}</td><td class="mono" style="padding:8px;">$${(r.sh.shares[x.i] * r.prices[x.i]).toFixed(2)}</td></tr>`).join('')}
+      <tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;" class="faint">Left as cash (rounding to whole shares)</td><td></td><td></td><td></td><td class="mono" style="padding:8px;">$${r.sh.cash.toFixed(2)}</td></tr></tbody></table></div>
+      <div class="faint" style="font-size:11.5px;margin-top:8px;">Model's own estimate of this mix's yearly volatility: ${(r.now.vol * 100).toFixed(1)}%. ${r.dropped.length ? 'Left out for too little history: ' + esc(r.dropped.join(', ')) + '.' : ''}</div>
+    </div>`;
+  }
+  return `<div class="v3-warn warn" style="margin-bottom:14px;font-size:12.5px;line-height:1.6;">${icon('alertTriangle')}<span><b>Research tool, not advice and not an order.</b> This page shows what a rules-based model would hold and how that rule would have done on past prices. It does not place trades. Past results do not predict future ones, you can lose money, and VaticTrader does not know your situation. Talk to a licensed adviser before investing real money.</span></div>
+  <div class="panel panel-pad">
+    <div class="panel-head"><h3>${icon('layers')} Portfolio Builder</h3><span class="badge badge-info">Multi-asset · whole shares · costs included</span></div>
+    <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 12px;">Pick a basket of assets and the model chooses how much of each to hold, re-balancing on a schedule and counting trading costs. It is built on the idea in the multi-period portfolio paper (choose a few assets each period, charge costs, buy whole shares), but with simple statistics instead of the paper's neural-network forecasts, so it is easier to check and less likely to over-fit. The paper's headline return is not reproduced here.</p>
+    ${inputs}
+    <div style="display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap;"><button class="btn btn-primary" data-action="pb-run" ${PB.running ? 'disabled' : ''}>${icon('play')} ${PB.running ? 'Working...' : 'Build portfolio and test it'}</button><span id="pb-progress" class="faint" style="font-size:12.5px;">${esc(PB.progress)}</span></div>
+    ${PB.error ? `<div class="form-error" style="margin-top:10px;">${esc(PB.error)}</div>` : ''}
+  </div>${out}`;
+}
+function pbField(t, field) {
+  const k = field.slice(3), num = parseFloat(t.value);
+  if (k === 'symbols') PB.symbols = t.value;
+  else if (k === 'objective') PB.objective = t.value === 'minvol' ? 'minvol' : 'sharpe';
+  else if (isFinite(num)) PB[k] = num;
+  return true;
+}
+
 /* =============================== BACKTEST ENGINE (mock) ========================= */
 // Box-Muller for normally-distributed noise (more realistic returns than
 // uniform noise, real price changes are approximately log-normal).
@@ -6196,7 +6722,7 @@ function renderShell() {
   const u = State.user;
   const initials = (u.name || u.username).split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
   const billing = billingDisplay();
-  const titles = { dashboard: [t('nav_dashboard'), t('dashboard_subtitle')], strategies: [t('nav_my_strategies'), 'Create, test and deploy trading rules'], portfolio: ['Portfolio', T3('Your real broker account: balance, positions and results. Nothing simulated.', 'حسابك الحقيقي لدى الوسيط: الرصيد والمراكز والنتائج. لا شيء محاكى.')], builder: [State.editingId ? 'Edit Strategy' : 'New Strategy', 'Define entry rules, risk and exits'], broker: [t('nav_broker'), 'Link accounts to trade on demo or live'], settings: [t('nav_settings'), t('settings_subtitle')], templates: [t('nav_example_strategies'), 'Start from a classic, widely studied rule set'], community: [t('nav_community'), 'Browse and copy strategies from other traders'], markets: [t('nav_markets'), 'Price, crowd lean and instrument analysis'], feed: [t('nav_feed'), 'Activity from traders you follow'], profile: [(State.profileUsername && State.profileUsername !== State.user.username) ? 'Trader Profile' : t('nav_profile'), 'Public identity, bio and published strategies'], achievements: [t('nav_achievements'), 'Level, streak and unlocked badges'], developer: [t('nav_code_export'), 'Export Pine Script & MQL5 code'], detail: [detailStrategy() ? detailStrategy().name : 'Strategy', 'Performance detail & trade log'], learning: [t('nav_learning'), 'Short guides to get you trading smarter'], admin: ['Admin', 'Usage, billing and redemption codes'], journal: [T3('Trade journal', 'سجل التداول'), T3('Every real trade, with the reason it entered', 'كل صفقة حقيقية مع سبب دخولها')], alerts: [T3('Alerts', 'التنبيهات'), T3('Get told when your conditions are met, without deploying', 'احصل على إشعار عند تحقق شروطك دون نشر')] };
+  const titles = { pbuilder: ['Portfolio Builder', 'Choose a basket, see the allocation and how the rule would have done'], dashboard: [t('nav_dashboard'), t('dashboard_subtitle')], strategies: [t('nav_my_strategies'), 'Create, test and deploy trading rules'], portfolio: ['Portfolio', T3('Your real broker account: balance, positions and results. Nothing simulated.', 'حسابك الحقيقي لدى الوسيط: الرصيد والمراكز والنتائج. لا شيء محاكى.')], builder: [State.editingId ? 'Edit Strategy' : 'New Strategy', 'Define entry rules, risk and exits'], broker: [t('nav_broker'), 'Link accounts to trade on demo or live'], settings: [t('nav_settings'), t('settings_subtitle')], templates: [t('nav_example_strategies'), 'Start from a classic, widely studied rule set'], community: [t('nav_community'), 'Browse and copy strategies from other traders'], markets: [t('nav_markets'), 'Price, crowd lean and instrument analysis'], feed: [t('nav_feed'), 'Activity from traders you follow'], profile: [(State.profileUsername && State.profileUsername !== State.user.username) ? 'Trader Profile' : t('nav_profile'), 'Public identity, bio and published strategies'], achievements: [t('nav_achievements'), 'Level, streak and unlocked badges'], developer: [t('nav_code_export'), 'Export Pine Script & MQL5 code'], detail: [detailStrategy() ? detailStrategy().name : 'Strategy', 'Performance detail & trade log'], learning: [t('nav_learning'), 'Short guides to get you trading smarter'], admin: ['Admin', 'Usage, billing and redemption codes'], journal: [T3('Trade journal', 'سجل التداول'), T3('Every real trade, with the reason it entered', 'كل صفقة حقيقية مع سبب دخولها')], alerts: [T3('Alerts', 'التنبيهات'), T3('Get told when your conditions are met, without deploying', 'احصل على إشعار عند تحقق شروطك دون نشر')] };
   const [title, crumb] = titles[State.view] || titles.dashboard;
   const unread = (u.activity || []).filter(a => a.ts > (u.lastSeenActivityAt || 0)).length;
   const stratCount = (u.strategies || []).length;
@@ -6215,6 +6741,7 @@ function renderShell() {
         <div class="nav-group">
           ${navItem('strategies', 'strategy', t('nav_my_strategies'), stratCount || null)}
           ${navItem('templates', 'layers', t('nav_example_strategies'))}
+          ${navItem('pbuilder', 'chartBars', 'Portfolio Builder')}
           ${navItem('developer', 'code', t('nav_code_export'))}
         </div>
         <div class="nav-label">${T3('Trade', 'تداول')}</div>
@@ -6306,6 +6833,7 @@ function renderView() {
   switch (State.view) {
     case 'strategies': return renderStrategies();
     case 'portfolio': return renderPortfolio();
+    case 'pbuilder': return pbView();
     case 'builder': return renderBuilder();
     case 'broker': return renderBroker();
     case 'settings': return renderSettings();
@@ -6793,6 +7321,7 @@ async function loadRealLiveStatus() {
       }
     });
     State.realLiveDeployments = newDeps;
+    if (newDeps.some(d => d.fast_mode && (d.status === 'watching' || d.status === 'open'))) { try { const fr = await fetch('/api/fast/status', { headers: authHeaders() }); State.fastStatus = fr.ok ? await fr.json() : null; } catch (e) { State.fastStatus = null; } } else State.fastStatus = null;
     if (State.view === 'dashboard' || State.view === 'detail') render();
   } catch (e) {}
 }
@@ -8747,9 +9276,9 @@ function screenResultsInner() {
       <td class="mono" style="padding:9px 8px;color:${r.oosN >= 5 ? plColor(r.oosRet) : 'var(--text-faint)'}">${r.oosN >= 5 ? fmtPct(r.oosRet) : 'N/A'}</td>
       <td class="mono" style="padding:9px 8px;">${r.dd.toFixed(1)}%</td>`}
       <td style="padding:9px 8px;text-align:left;min-width:170px;"><span class="badge ${vcls[r.verdict] || 'badge-dim'}">${esc(r.verdict)}</span><div class="faint" style="font-size:11px;line-height:1.45;margin-top:4px;">${esc((r.reasons || []).slice(0, 2).join(' '))}</div></td>
-      <td style="padding:9px 0 9px 8px;white-space:nowrap;text-align:right;">${r.verdict === 'No data' || r.verdict === 'Not testable' ? `<button class="btn btn-outline btn-sm" data-action="scr-open" data-key="${esc(r.key)}">Use</button>` : `<button class="btn btn-outline btn-sm" data-action="scr-backtest" data-key="${esc(r.key)}" title="Backtest on my settings: saves it to My Strategies and runs the full backtest">Backtest mine</button> <button class="btn btn-primary btn-sm" data-action="scr-demo" data-key="${esc(r.key)}" title="Start demo trading: saves it to My Strategies and opens the demo launcher">Start demo</button> <button class="btn btn-ghost btn-sm" data-action="scr-open" data-key="${esc(r.key)}" title="Use: open it in the strategy builder to edit">Use</button>`}</td></tr>`;
+      <td style="padding:9px 0 9px 8px;white-space:nowrap;text-align:right;">${r.verdict === 'No data' || r.verdict === 'Not testable' ? `<button class="btn btn-outline btn-sm" data-action="scr-open" data-key="${esc(r.key)}">Use</button>` : `<button class="btn btn-outline btn-sm" data-action="scr-backtest" data-key="${esc(r.key)}" title="Backtest on my settings: saves it to My Strategies and runs the full backtest">Backtest mine</button> <button class="btn btn-primary btn-sm" data-action="scr-demo" data-key="${esc(r.key)}" title="Start demo trading: saves it to My Strategies and opens the demo launcher">Start demo</button> <button class="btn btn-ghost btn-sm" data-action="scr-open" data-key="${esc(r.key)}" title="Use: open it in the strategy builder to edit">Use</button> <button class="btn btn-outline btn-sm" data-action="tune-open" data-key="${esc(r.key)}" title="Tune: search nearby settings, then check them on history that was not used to choose">Tune</button>`}</td></tr>`;
   }).join('');
-  return `${screenCompare()}
+  return `${renderTuneBatchPanel()}${screenCompare()}
     <div class="filter-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:4px 0 12px;">
       <div class="asset-pills">${pill('scr-vf', 'all', vf, `All (${sc.rows.length})`)}${pill('scr-vf', 'passmarg', vf, `Passes and marginal (${cnt('Passes') + cnt('Marginal')})`)}${pill('scr-vf', 'pass', vf, `Passes only (${cnt('Passes')})`)}</div>
       <div class="asset-pills">${pill('scr-dir', 'All', df, 'Long and short')}${pill('scr-dir', 'long', df, 'Long')}${pill('scr-dir', 'short', df, 'Short')}</div>
@@ -8873,7 +9402,7 @@ function renderOptimizePanel(s) {
   const goal = State.optimizeGoal || 'totalReturn';
   const cached = State.optimizeCache && State.optimizeCache[s.id];
   return `<div class="panel panel-pad" style="margin-bottom:16px;">
-    <div class="panel-head"><h3>${icon('target')} Optimize parameters</h3></div>
+    <div class="panel-head"><h3>${icon('target')} Quick optimizer <span class="badge badge-dim" style="margin-left:6px;">One backtest, no hold-out</span></h3></div>
     <div class="hint" style="margin-bottom:12px;">Searches take-profit, stop-loss, position size and this strategy's first condition threshold for the combination that scores best against your chosen goal, evaluated against the same real price history as your backtest.</div>
     <div class="asset-pills" style="margin-bottom:12px;">
       ${Object.keys(OPTIMIZE_GOAL_LABELS).map(k => `<button type="button" class="asset-pill ${goal === k ? 'on' : ''}" data-action="set-optimize-goal" data-goal="${k}">${esc(OPTIMIZE_GOAL_LABELS[k])}</button>`).join('')}
@@ -9027,6 +9556,7 @@ function renderDetail() {
     <div class="review-list">${generateStrategyReview(s).map(r => `<div class="review-item review-${r.type}">${icon(r.type === 'good' ? 'check' : r.type === 'warning' ? 'bolt' : 'compass')}<span>${esc(r.text)}</span></div>`).join('')}</div>
   </div>
   ${v3BacktestHonesty(s, bt)}
+  ${renderTunePanel(s)}
   ${renderOptimizePanel(s)}
   ${v6StrategyTradesPanel(s)}
   ${renderRobustnessPanel(s)}
@@ -9524,7 +10054,8 @@ const VATICTRADER_FEATURE_GUIDES = [
    "Open a strategy to see its win rate, total return, max drawdown and Sharpe ratio. Backtests run on real historical prices (the badge shows the source and dates). If an instrument has no real history, you get no result instead of an invented one. Treat them as a sanity check, not a forecast.",
    "Read the Strategy Review: a rules-based, plain-language take on what those specific numbers mean. It is not AI.",
    "Use Optimize parameters: pick a goal (total return, max drawdown, win rate or Sharpe ratio) and run it to see ranked take-profit, stop-loss, size and threshold combinations, with an Apply button on the best one.",
-   "An optimized result can be overfit to one simulation, so run the Monte Carlo robustness test afterwards to see how it holds up when its trades are reshuffled."
+   "An optimized result can be overfit to one simulation, so run the Monte Carlo robustness test afterwards to see how it holds up when its trades are reshuffled.",
+   "For a more careful search use Tune settings: it ranks nearby settings on the first 70% of history with costs doubled, then checks the shortlist once on the last 30%. In the Strategy screener, the Tune button on a result row does the same."
   ]
  },
  {
@@ -10837,6 +11368,7 @@ function renderModal() {
   if (m.type && m.type.indexOf('v3-') === 0) return v3Modal(m);
   if (m.type && m.type.indexOf('v7-') === 0) return v7Modal(m);
   if (m.type === 'golive') return renderGoLiveModal(m);
+  if (m.type === 'tune') return renderTuneModal(m);
   if (m.type === 'copy-confirm') {
     const e = (Array.isArray(State.community) ? State.community : []).find(x => x.id === m.entryId);
     if (!e) return '';
@@ -10914,7 +11446,8 @@ function renderModal() {
           <form data-form="connect-alpaca">
             <div class="field"><label>API Key ID</label><input class="input" name="apiKeyId" placeholder="e.g. PKXXXXXXXXXXXXXXXXXX" required autocomplete="off"></div>
             <div class="field"><label>Secret Key</label><input class="input" type="password" name="apiSecretKey" placeholder="••••••••••••••••••••" required autocomplete="off"></div>
-            <div class="hint" style="margin-bottom:14px;">We'll verify these against Alpaca's live paper-trading API before saving anything. Your secret key is encrypted before it's stored and is never sent back to your browser again.</div>
+            <div class="hint" style="margin-bottom:10px;">We'll verify these against Alpaca's live paper-trading API before saving anything. Your secret key is encrypted before it's stored and is never sent back to your browser again.</div>
+            <div class="v3-warn" style="margin-bottom:14px;font-size:12.5px;line-height:1.55;">${icon('shield')}<span><b>${T3('Your keys, your account.', 'مفاتيحك وحسابك.')}</b> ${T3('Every user connects their own Alpaca keys. They are only ever used for your own orders and your own price feed, never shared with another user or used by VaticTrader for anything else. Create keys with trading permission only (no withdrawals exist on Alpaca API keys). <b>Price data:</b> a free Alpaca account streams the IEX feed, which covers only trades that happened on the IEX exchange, a fraction of total market volume. Thin stocks can show gaps or stale prices. The full consolidated (SIP) feed needs a paid Alpaca data subscription, and Alpaca limits a free account to one live data connection and 30 symbols at a time.', 'يستخدم كل مستخدم مفاتيح ألباكا الخاصة به. تُستخدم فقط لأوامرك ولخلاصة أسعارك، ولا تُشارك مع أي مستخدم آخر. بيانات الأسعار: الحساب المجاني يبث خلاصة IEX التي تغطي جزءًا فقط من حجم السوق. الخلاصة الكاملة تحتاج اشتراكًا مدفوعًا لدى ألباكا، ويسمح الحساب المجاني باتصال بيانات واحد و30 رمزًا.')}</span></div>
             <div id="alpaca-connect-error" class="form-error" style="display:none;"></div>
             <div class="modal-foot">
               <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
@@ -11653,6 +12186,22 @@ function onDelegatedClick(e) {
       else toast('Nothing to simulate: this strategy had zero trades to resample from.', 'err');
       break;
     }
+    case 'tune-open': { const k = el.getAttribute('data-key'); State.modal = { type: 'tune', tkey: 'row:' + k }; render(); break; }
+    case 'tune-dim': {
+      const key = el.getAttribute('data-tkey'), id = el.getAttribute('data-dim'), tk = tuneState(key); if (tk.running) break;
+      tk.dimIds = tk.dimIds || [];
+      if (tk.dimIds.includes(id)) tk.dimIds = tk.dimIds.filter(x => x !== id);
+      else if (tk.dimIds.length >= TUNE_MAX_DIMS) { toast(`Pick at most ${TUNE_MAX_DIMS} things to tune at once.`, 'info'); break; }
+      else tk.dimIds.push(id);
+      render(); break;
+    }
+    case 'tb-run': tuneBatchStart(); break;
+    case 'pb-run': pbRun(); break;
+    case 'pb-csv': { const c = pbCsv(); if (c) { try { navigator.clipboard.writeText(c); toast('Allocation copied as CSV.', 'ok'); } catch (e) { toast('Could not copy. Select the table instead.', 'err'); } } break; }
+    case 'tb-stop': tuneBatchState().cancel = true; break;
+    case 'tune-run': tuneStart(el.getAttribute('data-tkey')); break;
+    case 'tune-stop': tuneState(el.getAttribute('data-tkey')).cancel = true; break;
+    case 'tune-apply': tuneApply(el.getAttribute('data-tkey'), parseInt(el.getAttribute('data-idx'), 10) || 0); break;
     case 'set-optimize-goal': State.optimizeGoal = el.getAttribute('data-goal'); render(); break;
     case 'run-optimize': {
       const id = el.getAttribute('data-id');
@@ -11729,7 +12278,7 @@ function onDelegatedClick(e) {
       const checks = goLiveChecks(x, m.mode, m.brokerId);
       try { v3GoLiveChecks(x, m.mode, checks); } catch (e) {}
       if (checks.some(c => c.status === 'fail') || (m.mode === 'live' && !m.ack)) break;
-      { const n = parseInt(m.maxLosses, 10); V3.pendingOpts = m.mode === 'live' ? { repeat: !!m.repeat, maxConsecutiveLosses: m.repeat && n >= 1 ? n : null } : null; }
+      { const n = parseInt(m.maxLosses, 10); V3.pendingOpts = m.mode === 'live' ? { repeat: !!m.repeat, maxConsecutiveLosses: m.repeat && n >= 1 ? n : null, fast: !!m.fast } : null; }
       State.modal = null;
       deployStrategyToBroker(x, m.mode, m.brokerId);
       break;
@@ -12043,11 +12592,12 @@ async function deployStrategyToBroker(s, mode, brokerId) {
           entryConditions: s.entryConditions, takeProfit: s.takeProfit, stopLoss: s.stopLoss, positionSizePct: s.positionSizePct,
           trailingStopPct: trailPctOf(s) || null, leverage: leverageOf(s),
           repeat: !!(V3.pendingOpts && V3.pendingOpts.repeat), maxConsecutiveLosses: V3.pendingOpts ? V3.pendingOpts.maxConsecutiveLosses : null,
+          fastMode: !!(V3.pendingOpts && V3.pendingOpts.fast),
         }),
       });
       const data = await res.json();
       const po_ = V3.pendingOpts; V3.pendingOpts = null;
-      if (res.status === 412) { V3.settings = null; State.modal = { type: 'golive', stratId: s.id, mode: 'live', brokerId, typed: '', ack: false, repeat: !!(po_ && po_.repeat), maxLosses: (po_ && po_.maxConsecutiveLosses) ? String(po_.maxConsecutiveLosses) : '3' }; render(); toast(data.error || 'A safety check stopped this.', 'err'); return; }
+      if (res.status === 412) { V3.settings = null; State.modal = { type: 'golive', stratId: s.id, mode: 'live', brokerId, typed: '', ack: false, fast: !!(po_ && po_.fast), repeat: !!(po_ && po_.repeat), maxLosses: (po_ && po_.maxConsecutiveLosses) ? String(po_.maxConsecutiveLosses) : '3' }; render(); toast(data.error || 'A safety check stopped this.', 'err'); return; }
       if (!res.ok) { toast(data.error || 'Could not start live monitoring.', 'err'); return; }
     } catch (e) {
       toast('Could not reach the server to start live monitoring. Is the backend running?', 'err');
@@ -12107,6 +12657,7 @@ function onDelegatedChange(e) {
   if (field && v3Change(t, field)) return;
   if (field === 'strat-status-filter') { State.stratStatus = t.value; updateStrategyResults(); return; }
   if (field === 'code-export-strategy') { State.codeExportStrategyId = t.value; render(); return; }
+  if (field === 'tb-n') { tuneBatchState().n = t.value === 'all' ? 'all' : parseInt(t.value, 10); tuneBatchPaint(); return; }
   if (field === 'scr-set') { screenCfg().set = t.value; screenPaint(); return; }
   if (field === 'scr-custom') { screenCfg().custom = t.value; screenPaint(); return; }
   if (field === 'v7-email-on') { v3SaveSettings({ notify: { emailEnabled: t.checked } }, T3('Email setting saved.', 'تم حفظ إعداد البريد.')); return; }
@@ -13761,6 +14312,7 @@ function v3Click(action, el) {
 }
 async function v3LoadAlertsForce() { const r = await v3api('GET', '/api/alerts'); if (r.ok) { V3.alerts = r.data.alerts; V3.alertLimit = r.data.limit; } render(); }
 function v3Input(t, field) {
+  if (field && field.indexOf('pb-') === 0) return pbField(t, field);
   if (field && (field.indexOf('v5-') === 0 || field === 'tpl-search' || field === 'scr-search' || field === 'jr-search')) return v5Input(t, field);
   if (field === 'v3-golive-maxloss') { if (State.modal) State.modal.maxLosses = t.value; return true; }
   if (field === 'v3-golive-type') {
@@ -13774,7 +14326,9 @@ function v3Input(t, field) {
   return false;
 }
 function v3Change(t, field) {
+  if (field && field.indexOf('pb-') === 0) return pbField(t, field);
   if (field && field.indexOf('v5-') === 0) return v5Change(t, field);
+  if (field === 'v3-golive-fast') { const m = State.modal; if (m) { m.fast = t.checked; render(); } return true; }
   if (field === 'v3-golive-repeat') { const m = State.modal; if (m) { m.repeat = t.checked; if (t.checked && !m.maxLosses) m.maxLosses = '3'; render(); } return true; }
   if (field === 'v3-event') { const patch = { notify: { events: { [t.getAttribute('data-k')]: t.checked } } }; v3api('PUT', '/api/settings', patch).then(r => { if (r.ok) V3.settings = r.data; else toast(T3('Could not save.', 'تعذر الحفظ.'), 'err'); render(); }); return true; }
   if (field === 'v3-daily-hour') { v3SaveSettings({ notify: { dailyHourUtc: parseInt(t.value, 10) } }, T3('Saved.', 'تم الحفظ.')); return true; }
@@ -13977,8 +14531,11 @@ function v3AutoPausePanel(s) {
   const dep = (State.realLiveDeployments || []).find(d => d.strategy_id === s.id); if (!dep) return '';
   const mine = V3.journal && V3.journal.trades ? V3.journal.trades.filter(t => t.strategyId === s.id && t.status === 'closed' && t.pl !== null).slice(0, 10) : [];
   const dots = mine.length ? `<div style="display:flex;gap:5px;align-items:center;margin-top:10px;flex-wrap:wrap;"><span class="faint" style="font-size:12px;">${T3('Latest results, newest first:', 'آخر النتائج، الأحدث أولًا:')}</span>${mine.map(t => `<span class="v3-dotr ${t.pl > 0 ? 'w' : 'l'}" title="${esc(fmtPct(t.plPct))}">${t.pl > 0 ? 'W' : 'L'}</span>`).join('')}</div>` : '';
+  const fsx = State.fastStatus;
+  const fastLine = dep.fast_mode ? `<div class="v3-warn ${fsx && fsx.state === 'authenticated' ? '' : 'warn'}" style="margin-bottom:12px;font-size:12.5px;line-height:1.5;">${icon('bolt')}<span><b>${T3('Fast mode', 'الوضع السريع')}:</b> ${fsx ? (fsx.state === 'authenticated' ? T3('streaming your Alpaca prices (' + esc(String(fsx.feed || 'iex').toUpperCase()) + ' feed' + (fsx.lastTradeAt ? ', last trade ' + new Date(fsx.lastTradeAt).toLocaleTimeString() : ', no trades received yet') + '). If the stream drops, the normal once-a-minute check keeps running.', 'يبث أسعار ألباكا. إذا انقطع البث يستمر الفحص العادي كل دقيقة.') : esc(fsx.error || ('stream ' + fsx.state)) + ' ' + T3('The normal once-a-minute check is still running.', 'الفحص العادي كل دقيقة مستمر.')) : T3('checking stream...', 'جارٍ فحص البث...')}</span></div>` : '';
   return `<div class="panel panel-pad" style="margin-bottom:16px;">
     <div class="panel-head"><h3>${icon('shield')} ${T3('Keep trading and auto-pause', 'استمر بالتداول والإيقاف التلقائي')}</h3>${dep.status === 'paused' ? `<span class="badge badge-dim">${T3('PAUSED', 'متوقف')}</span>` : ''}</div>
+    ${fastLine}
     ${dep.status === 'paused' && dep.pause_reason ? `<div class="v3-warn warn" style="margin-bottom:10px;">${icon('alertTriangle')}<span>${esc(dep.pause_reason)} ${T3('Look at why before resuming.', 'افحص السبب قبل الاستئناف.')}</span><button class="btn btn-primary btn-sm" style="margin-inline-start:auto;" data-action="resume-live-strategy" data-id="${esc(s.id)}">${T3('Resume', 'استئناف')}</button></div>` : ''}
     <label class="v3-check" style="margin-bottom:8px;"><input type="checkbox" id="v3-ap-repeat" ${dep.repeat ? 'checked' : ''}> ${T3('Keep trading after each trade closes', 'استمر بالتداول بعد إغلاق كل صفقة')}</label>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="font-size:13px;">${T3('Pause automatically after', 'أوقف تلقائيًا بعد')}</span><input class="input" id="v3-ap-n" type="number" min="1" max="50" step="1" value="${dep.max_consecutive_losses || ''}" placeholder="${T3('off', 'متوقف')}" style="max-width:90px;"><span style="font-size:13px;">${T3('losses in a row', 'خسائر متتالية')}</span><button class="btn btn-primary btn-sm" data-action="v3-live-settings" data-id="${esc(s.id)}">${T3('Save', 'حفظ')}</button></div>
@@ -13988,9 +14545,12 @@ function v3AutoPausePanel(s) {
 }
 function v3GoLiveFooter(m, live) {
   if (!live) return '';
+  const fastBlock = `<label class="v3-check" style="margin-top:10px;"><input type="checkbox" data-field="v3-golive-fast" ${m.fast ? 'checked' : ''}> <b>${T3('Fast mode (streaming prices)', 'الوضع السريع (أسعار مباشرة)')}</b></label>
+    ${m.fast ? `<div class="v3-warn warn" style="margin-top:6px;font-size:12px;line-height:1.55;">${icon('alertTriangle')}<span>${T3('Checks your entry rule on every price update (at most once a second) instead of once a minute, and follows your trailing stop tick by tick. It can enter on a bar that has not closed yet, which a backtest does not do, so live results can differ from the backtest. The entry rule must hold on two checks in a row before an order is sent. Uses your own Alpaca price feed (free accounts get IEX data only, one connection, 30 symbols). Take profit and stop loss still sit at the broker as orders. Not tested on a live account yet: start on paper. Not a promise of profit; fast trading usually costs more in spreads and fees.', 'يفحص شرط الدخول عند كل تحديث سعر (مرة كل ثانية كحد أقصى) بدل مرة كل دقيقة ويتتبع الوقف المتحرك لحظيًا. قد يدخل على شمعة لم تُغلق بعد وهذا لا يحدث في الاختبار الخلفي. تبقى أوامر جني الربح ووقف الخسارة لدى الوسيط. غير مجرّب على حساب حقيقي: ابدأ بالورقي.')}</span></div>` : ''}`;
   return `<div class="v3-golive-opts"><label class="v3-check"><input type="checkbox" data-field="v3-golive-repeat" ${m.repeat ? 'checked' : ''}> ${T3('Keep trading after each trade (otherwise it takes one trade and stops)', 'استمر بالتداول بعد كل صفقة (وإلا تنفذ صفقة واحدة وتتوقف)')}</label>
     ${m.repeat ? `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;"><span style="font-size:12.5px;">${T3('Pause automatically after', 'أوقف تلقائيًا بعد')}</span><input class="input" data-field="v3-golive-maxloss" type="number" min="1" max="50" value="${esc(m.maxLosses || '')}" style="max-width:80px;"><span style="font-size:12.5px;">${T3('losses in a row (empty = never)', 'خسائر متتالية (فارغ = أبدًا)')}</span></div>` : ''}</div>
-    <div class="field" style="margin-bottom:12px;"><label>${T3('Type GO LIVE to confirm. This places real orders in your broker account and you can lose money.', 'اكتب GO LIVE للتأكيد. هذا يضع أوامر حقيقية في حسابك ويمكن أن تخسر المال.')}</label><input class="input" data-field="v3-golive-type" value="${esc(m.typed || '')}" autocomplete="off" placeholder="GO LIVE" style="max-width:220px;"></div>`;
+    ${fastBlock}
+    <div class="field" style="margin:12px 0;"><label>${T3('Type GO LIVE to confirm. This places real orders in your broker account and you can lose money.', 'اكتب GO LIVE للتأكيد. هذا يضع أوامر حقيقية في حسابك ويمكن أن تخسر المال.')}</label><input class="input" data-field="v3-golive-type" value="${esc(m.typed || '')}" autocomplete="off" placeholder="GO LIVE" style="max-width:220px;"></div>`;
 }
 
 /* ------------------------------ Strategy Index ------------------------------ */

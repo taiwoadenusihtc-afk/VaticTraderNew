@@ -257,12 +257,16 @@ function tfToAlpaca(tf) {
 
 async function alpacaGetBars(baseUrl, apiKeyId, apiSecretKey, symbol, timeframe, limit) {
   const tf = tfToAlpaca(timeframe);
-  const url = `${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=${tf}&limit=${limit}`;
+  // Ask for the newest bars explicitly (start date + newest-first), then put them back in time order.
+  // Without these Alpaca applies its own defaults, which can return the earliest bars of a window instead of the latest.
+  const lookbackDays = ({ '1m': 6, '5m': 20, '15m': 30, '30m': 45, '1H': 90, '4H': 90, '1D': 400 })[timeframe] || 30;
+  const start = new Date(Date.now() - lookbackDays * 86400000).toISOString();
+  const url = `${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=${tf}&start=${encodeURIComponent(start)}&limit=${limit}&sort=desc&adjustment=split&feed=iex`;
   const res = await fetch(url, { headers: alpacaAuthHeaders(apiKeyId, apiSecretKey) });
   if (!res.ok) { const body = await res.text().catch(() => ''); throw new Error(`Alpaca bars request failed (${res.status}): ${body.slice(0, 200)}`); }
   const data = await res.json();
-  const raw = data.bars || [];
-  return raw.map(b => ({ open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
+  const raw = (data.bars || []).slice().reverse();
+  return raw.map(b => ({ t: Date.parse(b.t), open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
 }
 
 function computeSMA(values, period) {
@@ -1387,7 +1391,51 @@ async function rearmOrPause(client, dep) {
   }
   await client.query(`UPDATE live_deployments SET status='watching', needs_reset=true, closed_at=now(), entry_order_id=NULL, entry_price=NULL, qty=NULL, opened_at=NULL WHERE id=$1`, [dep.id]);
 }
-async function runLiveTickForDeployment(dep, client) {
+// ---- Fast mode state (streaming ticks) -------------------------------------
+const FAST_MIN_EVAL_MS = parseInt(process.env.FAST_MIN_EVAL_MS, 10) || 1000;     // at most one evaluation per deployment per second
+const FAST_BARS_TTL_MS = parseInt(process.env.FAST_BARS_TTL_MS, 10) || 15000;    // how long fetched bars are reused between ticks
+const FAST_CONFIRM_EVALS = Math.max(1, parseInt(process.env.FAST_CONFIRM_EVALS, 10) || 2); // entry rule must hold on this many consecutive evaluations
+const FAST_POS_CHECK_MS = parseInt(process.env.FAST_POS_CHECK_MS, 10) || 5000;   // how often an open fast position is checked at the broker
+const fastState = new Map(); // deployment id -> { lastRun, bars, barsAt, confirm, lastAuditAt, lastSignal, lastPosCheck }
+const liveInFlight = new Set(); // deployment ids being processed right now (slow poller and stream share this)
+function fastSt(id) { let s = fastState.get(id); if (!s) { s = { lastRun: 0, bars: null, barsAt: 0, confirm: 0, lastAuditAt: 0, lastSignal: null, lastPosCheck: 0, touched: Date.now() }; fastState.set(id, s); } s.touched = Date.now(); return s; }
+
+// Runs one deployment. Wraps the engine with a per-deployment lock and a fresh
+// re-read of the row, so the 60 s poller and the streaming path can never both
+// act on the same deployment at once or on stale state (an order is never sent twice).
+async function runLiveTickForDeployment(dep, client, opts) {
+  if (liveInFlight.has(dep.id)) return;
+  liveInFlight.add(dep.id);
+  try {
+    const fresh = await client.query('SELECT * FROM live_deployments WHERE id=$1', [dep.id]);
+    if (!fresh.rows.length) return;
+    const cur = fresh.rows[0];
+    if (cur.status !== 'watching' && cur.status !== 'open') return;
+    if (opts && opts.price && !cur.fast_mode) return;
+    await runLiveTickForDeploymentInner(cur, client, opts || {});
+  } finally { liveInFlight.delete(dep.id); }
+}
+// Trailing stop shared by the slow poller (price from the broker position) and Fast mode (price from the stream).
+// Returns true if the trade was closed.
+async function applyTrailingStop(client, dep, px) {
+  const trail = parseFloat(dep.trail_pct);
+  if (!(trail > 0) || !isFinite(px) || px <= 0) return false;
+  const short = dep.direction === 'short';
+  const prev = parseFloat(dep.trail_peak) || parseFloat(dep.entry_price) || px;
+  const peak = short ? Math.min(prev, px) : Math.max(prev, px);
+  if (peak !== prev) { await client.query('UPDATE live_deployments SET trail_peak=$1 WHERE id=$2', [peak, dep.id]); dep.trail_peak = peak; }
+  const trigger = short ? peak * (1 + trail / 100) : peak * (1 - trail / 100);
+  if (!(short ? px >= trigger : px <= trigger)) return false;
+  const r = await closeDeploymentPosition(dep.username, dep, 'trailing_stop');
+  if (!r.ok) return false;
+  notifyUser(dep.username, 'exit', `${dep.symbol} closed by trailing stop${r.pnl !== null && r.pnl !== undefined ? (r.pnl >= 0 ? ', +$' : ', -$') + Math.abs(r.pnl).toFixed(2) : ''}`,
+    `${dep.strategy_name || 'Your strategy'}: price fell ${trail}% from its best level of ${peak.toFixed(2)}, so the trade was closed${r.exitPrice ? ' at ' + Number(r.exitPrice).toFixed(2) : ''}.`, 'portfolio');
+  const fresh = await client.query('SELECT * FROM live_deployments WHERE id=$1', [dep.id]);
+  if (dep.repeat && fresh.rows[0]) await rearmOrPause(client, fresh.rows[0]);
+  return true;
+}
+async function runLiveTickForDeploymentInner(dep, client, opts) {
+  const fastPx = opts && opts.price > 0 ? opts.price : null;
   try {
     const adapter = getBrokerAdapter(dep.broker);
     if (!adapter || !adapter.supportsAutomatedExecution) {
@@ -1399,17 +1447,34 @@ async function runLiveTickForDeployment(dep, client) {
     const creds = { primary: credRes.rows[0].api_key_id, secretPlain: decryptSecret(credRes.rows[0].api_secret_enc), baseUrl: credRes.rows[0].base_url };
 
     if (dep.status === 'watching') {
-      const bars = await adapter.getBars(creds, dep.symbol, dep.timeframe, 200);
+      const fs_ = fastPx ? fastSt(dep.id) : null;
+      let bars;
+      if (fastPx) {
+        // Fast mode: reuse recently fetched bars and lay the latest streamed trade over the forming bar.
+        if (!fs_.bars || Date.now() - fs_.barsAt > FAST_BARS_TTL_MS) { fs_.bars = await adapter.getBars(creds, dep.symbol, dep.timeframe, 200); fs_.barsAt = Date.now(); }
+        bars = fs_.bars.map(b => b);
+        if (bars.length) { const l = bars[bars.length - 1]; bars[bars.length - 1] = { ...l, close: fastPx, high: Math.max(l.high, fastPx), low: Math.min(l.low, fastPx) }; }
+      } else {
+        bars = await adapter.getBars(creds, dep.symbol, dep.timeframe, 200);
+      }
       if (bars.length < 30) { await client.query('UPDATE live_deployments SET last_checked_at=now() WHERE id=$1', [dep.id]); return; }
       const conditions = dep.entry_conditions;
       const cache = buildIndicatorCache(bars, conditions);
       const lastIdx = bars.length - 1;
       const audit = buildAuditSnapshot(conditions, bars, cache);
-      await client.query(
-        'UPDATE live_deployments SET audit_conditions=$1, audit_signal=$2, audit_price=$3, audit_at=now(), last_checked_at=now() WHERE id=$4',
-        [JSON.stringify(audit.details), audit.signal, audit.price, dep.id]
-      );
+      if (!fastPx || audit.signal !== fs_.lastSignal || Date.now() - fs_.lastAuditAt > 5000) {
+        await client.query(
+          'UPDATE live_deployments SET audit_conditions=$1, audit_signal=$2, audit_price=$3, audit_at=now(), last_checked_at=now() WHERE id=$4',
+          [JSON.stringify(audit.details), audit.signal, audit.price, dep.id]
+        );
+        if (fastPx) { fs_.lastAuditAt = Date.now(); fs_.lastSignal = audit.signal; }
+      }
       const signal = audit.signal;
+      if (fastPx) {
+        // A forming bar can flip the rule on and off. Require it to hold on consecutive evaluations before sending an order.
+        fs_.confirm = signal ? fs_.confirm + 1 : 0;
+        if (signal && !dep.needs_reset && fs_.confirm < FAST_CONFIRM_EVALS) return;
+      }
       if (dep.needs_reset) {
         // Keep-trading mode: after an exit, wait for the entry rule to turn false once so it does not re-enter on the same signal.
         if (!signal) await client.query('UPDATE live_deployments SET needs_reset=false WHERE id=$1', [dep.id]);
@@ -1477,6 +1542,13 @@ async function runLiveTickForDeployment(dep, client) {
       // Check whether the position is still open at the broker (the
       // bracket's take-profit or stop-loss leg may have already closed it
       // broker-side, independent of this server).
+      if (fastPx) {
+        // Fast mode: the trailing stop follows every streamed trade. Broker-side exits are still checked every few seconds below.
+        if (await applyTrailingStop(client, dep, fastPx)) return;
+        const fs2 = fastSt(dep.id);
+        if (Date.now() - fs2.lastPosCheck < FAST_POS_CHECK_MS) return;
+        fs2.lastPosCheck = Date.now();
+      }
       const posRes = await adapter.getPosition(creds, dep.symbol);
       if (posRes.status === 404) {
         await client.query(`UPDATE live_deployments SET status='closed', closed_at=now(), last_checked_at=now() WHERE id=$1`, [dep.id]);
@@ -1506,26 +1578,11 @@ async function runLiveTickForDeployment(dep, client) {
         // Trailing stop. The app follows the best price reached since entry and closes
         // the trade when price falls back by the chosen percentage. The fixed stop-loss
         // order at the broker stays in place underneath as the safety net.
-        const trail = parseFloat(dep.trail_pct);
-        if (trail > 0 && posRes.ok) {
+        // (In Fast mode the stream already applied it on the latest trade.)
+        if (!fastPx && parseFloat(dep.trail_pct) > 0 && posRes.ok) {
           const pos = await posRes.json().catch(() => null);
           const px = pos ? parseFloat(pos.current_price) : NaN;
-          if (isFinite(px) && px > 0) {
-            const short = dep.direction === 'short';
-            const prev = parseFloat(dep.trail_peak) || parseFloat(dep.entry_price) || px;
-            const peak = short ? Math.min(prev, px) : Math.max(prev, px);
-            if (peak !== prev) await client.query('UPDATE live_deployments SET trail_peak=$1 WHERE id=$2', [peak, dep.id]);
-            const trigger = short ? peak * (1 + trail / 100) : peak * (1 - trail / 100);
-            if (short ? px >= trigger : px <= trigger) {
-              const r = await closeDeploymentPosition(dep.username, dep, 'trailing_stop');
-              if (r.ok) {
-                notifyUser(dep.username, 'exit', `${dep.symbol} closed by trailing stop${r.pnl !== null && r.pnl !== undefined ? (r.pnl >= 0 ? ', +$' : ', -$') + Math.abs(r.pnl).toFixed(2) : ''}`,
-                  `${dep.strategy_name || 'Your strategy'}: price fell ${trail}% from its best level of ${peak.toFixed(2)}, so the trade was closed${r.exitPrice ? ' at ' + Number(r.exitPrice).toFixed(2) : ''}.`, 'portfolio');
-                const fresh = await client.query('SELECT * FROM live_deployments WHERE id=$1', [dep.id]);
-                if (dep.repeat && fresh.rows[0]) await rearmOrPause(client, fresh.rows[0]);
-              }
-            }
-          }
+          await applyTrailingStop(client, dep, px);
         }
       }
     }
@@ -1550,6 +1607,33 @@ async function runLiveTick() {
 }
 if (process.env.DISABLE_LIVE_TICK !== '1') {
   setInterval(() => { runLiveTick().catch(e => console.error('live tick loop error:', e.message)); }, LIVE_TICK_INTERVAL_MS);
+}
+
+// ---- Fast mode: streaming price feed (one Alpaca data socket per user, using that user's own keys) ----
+let fastStream = null; // created in startFastStream() once the database pool exists
+function makeFastStream() { return require('./fast_stream').createStreamManager({
+  pool, decryptSecret,
+  feed: process.env.ALPACA_STREAM_FEED === 'sip' ? 'sip' : 'iex',
+  baseUrl: process.env.ALPACA_STREAM_URL || undefined,
+  refreshMs: parseInt(process.env.FAST_REFRESH_MS, 10) || 10000,
+  maxSymbols: parseInt(process.env.ALPACA_STREAM_MAX_SYMBOLS, 10) || 30,
+  log: (...a) => console.log('[fast]', ...a),
+  onTrade: (depId, username, symbol, price) => { fastTick(depId, price).catch(e => console.error('fast tick error:', e.message)); },
+}); }
+async function fastTick(depId, price) {
+  const st = fastSt(depId);
+  const now = Date.now();
+  if (liveInFlight.has(depId) || now - st.lastRun < FAST_MIN_EVAL_MS) return;
+  st.lastRun = now;
+  const client = await pool.connect();
+  try { await runLiveTickForDeployment({ id: depId }, client, { price }); }
+  finally { client.release(); }
+}
+function startFastStream() {
+  if (process.env.DISABLE_LIVE_TICK === '1' || process.env.FAST_MODE_ENABLED === '0') return;
+  if (!fastStream) fastStream = makeFastStream();
+  fastStream.start();
+  setInterval(() => { const cut = Date.now() - 3600000; for (const [id, s] of fastState) if (s.touched < cut) fastState.delete(id); }, 600000).unref();
 }
 
 
@@ -1797,6 +1881,7 @@ app.post('/api/live/deploy', requireAuth, async (req, res) => {
   const leverage = levRaw > 1 ? levRaw : 1;
   if (leverage > 5) return res.status(400).json({ error: 'Leverage can be 1x to 5x.' });
   const repeat = !!(req.body || {}).repeat;
+  const fastMode = !!(req.body || {}).fastMode;
   const mcl = parseInt((req.body || {}).maxConsecutiveLosses, 10);
   const maxLosses = mcl >= 1 && mcl <= 50 ? mcl : null;
   if (!strategyId || !symbol || !direction || !Array.isArray(entryConditions) || !entryConditions.length) {
@@ -1824,13 +1909,13 @@ app.post('/api/live/deploy', requireAuth, async (req, res) => {
   } catch (e) { return res.status(500).json({ error: 'Could not check the risk disclosure.' }); }
   try {
     await pool.query(
-      `INSERT INTO live_deployments (username, strategy_id, strategy_name, broker, symbol, timeframe, direction, entry_conditions, take_profit_pct, stop_loss_pct, position_size_pct, status, repeat, max_consecutive_losses, trail_pct, leverage)
-       VALUES ($1,$2,$3,'alpaca',$4,$5,$6,$7,$8,$9,$10,'watching',$11,$12,$13,$14)
+      `INSERT INTO live_deployments (username, strategy_id, strategy_name, broker, symbol, timeframe, direction, entry_conditions, take_profit_pct, stop_loss_pct, position_size_pct, status, repeat, max_consecutive_losses, trail_pct, leverage, fast_mode)
+       VALUES ($1,$2,$3,'alpaca',$4,$5,$6,$7,$8,$9,$10,'watching',$11,$12,$13,$14,$15)
        ON CONFLICT (username, strategy_id) DO UPDATE SET
          strategy_name=$3, symbol=$4, timeframe=$5, direction=$6, entry_conditions=$7, take_profit_pct=$8, stop_loss_pct=$9, position_size_pct=$10,
-         repeat=$11, max_consecutive_losses=$12, trail_pct=$13, leverage=$14, trail_peak=NULL, needs_reset=false, streak_from=now(), pause_reason=NULL,
+         repeat=$11, max_consecutive_losses=$12, trail_pct=$13, leverage=$14, fast_mode=$15, trail_peak=NULL, needs_reset=false, streak_from=now(), pause_reason=NULL,
          status='watching', entry_order_id=NULL, entry_price=NULL, qty=NULL, opened_at=NULL, closed_at=NULL, last_error=NULL`,
-      [req.username, strategyId, strategyName || '', symbol, timeframe || '15m', direction, JSON.stringify(entryConditions), takeProfit, stopLoss, positionSizePct, repeat, maxLosses, trailPct, leverage]
+      [req.username, strategyId, strategyName || '', symbol, timeframe || '15m', direction, JSON.stringify(entryConditions), takeProfit, stopLoss, positionSizePct, repeat, maxLosses, trailPct, leverage, fastMode]
     );
     trackEvent(req.username, 'live_deploy');
     res.json({ ok: true, status: 'watching' });
@@ -1841,8 +1926,13 @@ app.post('/api/live/deploy', requireAuth, async (req, res) => {
 });
 
 app.get('/api/live/status', requireAuth, async (req, res) => {
-  const result = await pool.query('SELECT strategy_id, symbol, status, direction, entry_price, qty, trail_pct, trail_peak, leverage, entry_order_id, opened_at, last_error, last_checked_at, repeat, max_consecutive_losses, pause_reason, audit_conditions, audit_signal, audit_price, audit_at FROM live_deployments WHERE username=$1', [req.username]);
+  const result = await pool.query('SELECT strategy_id, symbol, status, direction, entry_price, qty, trail_pct, trail_peak, leverage, fast_mode, entry_order_id, opened_at, last_error, last_checked_at, repeat, max_consecutive_losses, pause_reason, audit_conditions, audit_signal, audit_price, audit_at FROM live_deployments WHERE username=$1', [req.username]);
   res.json({ deployments: result.rows });
+});
+
+// Fast mode stream health for the signed-in user (their own Alpaca data connection).
+app.get('/api/fast/status', requireAuth, (req, res) => {
+  res.json({ enabled: process.env.FAST_MODE_ENABLED !== '0' && process.env.DISABLE_LIVE_TICK !== '1', ...(fastStream ? fastStream.status(req.username) : { available: false, state: 'off', symbols: [], error: null }) });
 });
 
 // Full real trade history for one strategy, independent of live_deployments'
@@ -4846,6 +4936,7 @@ async function start() {
       await initSchema();
       dbReady = true;
       console.log('Database ready.');
+      startFastStream();
       return;
     } catch (e) {
       if (attempt === maxAttempts) {

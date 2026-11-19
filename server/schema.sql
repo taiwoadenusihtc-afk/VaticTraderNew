@@ -392,3 +392,6 @@ CREATE TABLE IF NOT EXISTS usage_daily_users (
   users  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, event)
 );
+
+-- Fast mode: when true, the deployment is also driven by a streaming price feed (the user's own Alpaca data connection).
+ALTER TABLE live_deployments ADD COLUMN IF NOT EXISTS fast_mode BOOLEAN NOT NULL DEFAULT FALSE;
