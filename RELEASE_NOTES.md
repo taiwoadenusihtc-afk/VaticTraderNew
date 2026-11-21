@@ -12,6 +12,9 @@ Do this once
   2. Redeploy. No new env vars are required. Optional: FAST_MODE_ENABLED=0 (kill switch), ALPACA_STREAM_FEED=sip (only if your
      users have a paid Alpaca data plan), FAST_MIN_EVAL_MS (1000), FAST_CONFIRM_EVALS (2), FAST_BARS_TTL_MS (15000), FAST_POS_CHECK_MS (5000).
 
+Portfolio Builder has two modes: tickers, or "my strategies" (splits capital between strategies that have a real-data
+backtest with 10+ trades, using their backtest trades as daily profit streams; needs 1H/1D-type history, short timeframes are too short).
+
 Also fixed
   The live engine asked Alpaca for bars with no start date or sort order. It now asks for the newest bars explicitly
   (start + sort=desc + feed=iex). I could not check this against the real Alpaca API from here: watch the first live logs.

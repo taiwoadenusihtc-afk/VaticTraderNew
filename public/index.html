@@ -4682,7 +4682,7 @@ function pbNow(closes, P, prevW) {
   return { w, mu, vol: Math.sqrt(pbVar(w, cov)) * Math.sqrt(252) };
 }
 /* PB-MATH-END */
-const PB = { symbols: 'SPY, QQQ, IWM, TLT, GLD, XLE, XLF, XLV, XLK, EEM', capital: 10000, maxHold: 5, maxW: 40, lookback: 60, rebalDays: 5, costBps: 10, objective: 'sharpe', running: false, progress: '', error: '', result: null };
+const PB = { symbols: 'SPY, QQQ, IWM, TLT, GLD, XLE, XLF, XLV, XLK, EEM', capital: 10000, maxHold: 5, maxW: 40, lookback: 60, rebalDays: 5, costBps: 10, objective: 'sharpe', running: false, progress: '', error: '', result: null, mode: 'tickers', stratIds: null };
 function pbParseSymbols() { const seen = {}; return String(PB.symbols || '').split(/[\s,;]+/).map(s => s.trim().toUpperCase()).filter(s => /^[A-Z.]{1,8}$/.test(s) && !seen[s] && (seen[s] = 1)).slice(0, 15); }
 function pbAlignByDate(barsBySym) {
   const dayKey = t => new Date(t).toISOString().slice(0, 10);
@@ -4690,10 +4690,41 @@ function pbAlignByDate(barsBySym) {
   let days = [...maps[0].keys()].filter(d => maps.every(m => m.has(d))).sort();
   return { days, closes: maps.map(m => days.map(d => m.get(d))) };
 }
+// Strategies as the assets. Each strategy's backtest trades become a daily return stream (profit of trades closed that day,
+// as a fraction of the 10,000 the backtest started with). Only strategies backtested on real data qualify.
+function pbEligible(st) { const b = st && st.backtest; return !!(b && !b.noData && b.dataSource && b.dataSource !== 'simulated' && b.dataFrom && b.dataTo && Array.isArray(b.tradeLog)); }
+function pbStrategySeries(list) {
+  const dk = t => new Date(t).toISOString().slice(0, 10);
+  const from = Math.max(...list.map(s => s.backtest.dataFrom)), to = Math.min(...list.map(s => s.backtest.dataTo));
+  if (!(to > from)) return null;
+  const days = []; for (let t = Date.UTC(new Date(from).getUTCFullYear(), new Date(from).getUTCMonth(), new Date(from).getUTCDate()); t <= to; t += 86400000) { const w = new Date(t).getUTCDay(); if (w !== 0 && w !== 6) days.push(dk(t)); }
+  const idx = new Map(days.map((d, i) => [d, i]));
+  const closes = list.map(s => {
+    const r = new Array(days.length).fill(0);
+    s.backtest.tradeLog.forEach(tr => { const t = tr.closeTs; if (!t || t < from || t > to) return; let i = idx.get(dk(t)); if (i === undefined) return; r[i] += (tr.pnl || 0) / 10000; });
+    const c = [100]; for (let i = 0; i < r.length; i++) c.push(c[i] * (1 + r[i])); return c;
+  });
+  return { days, closes };
+}
+async function pbRunStrategies() {
+  const all = (State.user.strategies || []).filter(pbEligible);
+  const chosen = all.filter(s => !PB.stratIds || PB.stratIds[s.id]);
+  const few = chosen.filter(s => (s.backtest.trades || 0) < 10), list = chosen.filter(s => (s.backtest.trades || 0) >= 10);
+  if (list.length < 2) { PB.error = 'Pick at least 2 strategies that each have a real-data backtest with 10 or more trades.' + (few.length ? ' Left out for too few trades: ' + few.map(s => s.name).join(', ') + '.' : ''); return; }
+  const ser = pbStrategySeries(list);
+  const need = PB.lookback + 60;
+  if (!ser || ser.days.length < need) { PB.error = `The chosen strategies share only ${ser ? ser.days.length : 0} trading days of backtest history, and ${need} are needed. Short-timeframe strategies (1m, 5m, 15m) only have weeks of history. Choose strategies on 1H or 1D bars, or lower the look-back.`; return; }
+  const P = { lookback: Math.max(20, Math.min(250, PB.lookback)), rebalDays: Math.max(1, Math.min(60, PB.rebalDays)), costBps: Math.max(0, PB.costBps), maxHold: Math.max(1, Math.min(list.length, PB.maxHold)), maxW: Math.max(5, Math.min(100, PB.maxW)) / 100, objective: PB.objective, halfLife: 20 };
+  await new Promise(r => setTimeout(r, 30));
+  const wf = pbWalkForward(ser.closes, P), now = pbNow(ser.closes, P, null);
+  const act = ser.closes.map(c => { let n = 0; for (let i = 1; i < c.length; i++) if (c[i] !== c[i - 1]) n++; return n / (c.length - 1); });
+  PB.result = { mode: 'strategies', syms: list.map(s => s.name), meta: list.map(s => s.symbol + ' · ' + s.timeframe + ' · ' + s.direction), active: act, trades: list.map(s => s.backtest.trades), dropped: few.map(s => s.name), source: list[0].backtest.dataSource, days: ser.days, P, wf, now, capital: PB.capital, at: Date.now() };
+}
 async function pbRun() {
   if (PB.running) return;
   const syms = pbParseSymbols();
   PB.error = ''; PB.result = null;
+  if (PB.mode === 'strategies') { PB.running = true; render(); try { await pbRunStrategies(); } catch (e) { PB.error = 'Could not build the portfolio: ' + (e && e.message ? e.message : 'unknown error'); } finally { PB.running = false; PB.progress = ''; render(); } return; }
   if (syms.length < 3) { PB.error = 'Enter at least 3 symbols (up to 15), separated by commas.'; render(); return; }
   PB.running = true; render();
   try {
@@ -4728,8 +4759,17 @@ function pbChartSvg(a, b) {
 }
 function pbCsv() {
   const r = PB.result; if (!r) return '';
+  if (r.mode === 'strategies') { const rs = [['strategy', 'share_pct', 'amount']]; r.syms.forEach((s, i) => { if (r.now.w[i] > 0.0005) rs.push(['"' + s.replace(/"/g, '') + '"', (r.now.w[i] * 100).toFixed(2), (r.now.w[i] * r.capital).toFixed(2)]); }); return rs.map(x => x.join(',')).join('\n'); }
   const rows = [['symbol', 'weight_pct', 'price', 'shares', 'value']]; r.syms.forEach((s, i) => { if (r.now.w[i] > 0.0005) rows.push([s, (r.now.w[i] * 100).toFixed(2), r.prices[i].toFixed(2), r.sh.shares[i], (r.sh.shares[i] * r.prices[i]).toFixed(2)]); });
   rows.push(['CASH', '', '', '', r.sh.cash.toFixed(2)]); return rows.map(x => x.join(',')).join('\n');
+}
+function pbStrategyPicker() {
+  const mine = State.user.strategies || [], ok = mine.filter(pbEligible), no = mine.filter(s => !pbEligible(s));
+  if (!mine.length) return `<div class="hint" style="margin-top:12px;">You have no strategies yet. Build and backtest some first, then split your capital between them here.</div>`;
+  const row = s => { const on = !PB.stratIds || PB.stratIds[s.id], n = s.backtest.trades || 0; return `<label class="v3-check" style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-soft);"><input type="checkbox" data-field="pb-strat" data-id="${esc(s.id)}" ${on ? 'checked' : ''}> <b>${esc(s.name)}</b><span class="faint" style="font-size:12px;">${esc(s.symbol)} · ${esc(s.timeframe)} · ${esc(s.direction)} · ${n} backtest trades${n < 10 ? ' (too few, will be left out)' : ''}</span></label>`; };
+  return `<div style="margin-top:12px;"><div class="faint" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">Strategies to split your capital between</div>${ok.length ? ok.map(row).join('') : '<div class="hint">None of your strategies has a real-data backtest yet. Run a backtest on each one first.</div>'}
+    ${no.length ? `<div class="faint" style="font-size:12px;margin-top:8px;">Not available (no real-data backtest yet): ${no.map(s => esc(s.name)).join(', ')}.</div>` : ''}
+    <div class="faint" style="font-size:11.5px;line-height:1.55;margin-top:8px;">Each strategy's backtest trades become a daily profit stream and the model decides how to split your capital between them. These streams come from backtests, which may already be tuned to that history, and strategies that trade the same symbol move together, so treat the split as a starting point to check, not an answer.</div></div>`;
 }
 function pbView() {
   const r = PB.result, f = (id, label, val, extra) => `<div class="field" style="margin:0;"><label>${label}</label><input class="input" data-field="pb-${id}" ${extra || ''} value="${esc(String(val))}"></div>`;
@@ -4737,13 +4777,13 @@ function pbView() {
     ${f('capital', 'Starting amount ($)', PB.capital, 'type="number" min="100" step="100"')}${f('maxHold', 'Hold at most (assets)', PB.maxHold, 'type="number" min="1" max="15"')}${f('maxW', 'Max per asset (%)', PB.maxW, 'type="number" min="5" max="100"')}
     ${f('lookback', 'Look-back (days)', PB.lookback, 'type="number" min="20" max="250"')}${f('rebalDays', 'Re-balance every (days)', PB.rebalDays, 'type="number" min="1" max="60"')}${f('costBps', 'Cost per trade (bps)', PB.costBps, 'type="number" min="0" max="200"')}
     <div class="field" style="margin:0;"><label>Goal</label><select class="input" data-field="pb-objective"><option value="sharpe" ${PB.objective === 'sharpe' ? 'selected' : ''}>Best return / risk</option><option value="minvol" ${PB.objective === 'minvol' ? 'selected' : ''}>Lowest risk</option></select></div></div>
-    <div class="field" style="margin:12px 0 0;"><label>Assets to choose from (3 to 15 tickers, comma separated)</label><input class="input" data-field="pb-symbols" value="${esc(PB.symbols)}" autocomplete="off"></div>`;
+    ${PB.mode === 'strategies' ? pbStrategyPicker() : `<div class="field" style="margin:12px 0 0;"><label>Assets to choose from (3 to 15 tickers, comma separated)</label><input class="input" data-field="pb-symbols" value="${esc(PB.symbols)}" autocomplete="off"></div>`}`;
   let out = '';
   if (r) {
     const a = r.wf.stats, b = r.wf.statsEW, pc = v => fmtPct(v * 100), pv = v => (v * 100).toFixed(2) + '%', beat = a.sharpe > b.sharpe;
     const rows = r.syms.map((s, i) => ({ s, w: r.now.w[i], i })).filter(x => x.w > 0.0005).sort((x, y) => y.w - x.w);
     out = `<div class="panel panel-pad" style="margin-top:14px;">
-      <div class="panel-head"><h3>${icon('chartBars')} Walk-forward test</h3><span class="badge badge-dim">${r.days.length} shared days · ${r.wf.rebalances} re-balances · ${esc(r.source === 'alpaca' ? 'Alpaca' : 'Yahoo Finance')} data</span></div>
+      <div class="panel-head"><h3>${icon('chartBars')} Walk-forward test</h3><span class="badge badge-dim">${r.days.length} shared days · ${r.wf.rebalances} re-balances · ${r.mode === 'strategies' ? 'backtest trades of your strategies' : esc(r.source === 'alpaca' ? 'Alpaca' : 'Yahoo Finance') + ' data'}</span></div>
       <p class="muted" style="font-size:12.5px;line-height:1.6;margin:0 0 8px;">At every re-balance the model only sees earlier days, picks up to ${r.P.maxHold} assets, and pays ${r.P.costBps} bps on everything it trades. The grey line is the same assets held in equal parts and re-balanced on the same schedule.</p>
       ${pbChartSvg(r.wf.curve, r.wf.curveEW)}
       <div style="display:flex;gap:14px;font-size:12px;margin:4px 0 10px;"><span><i style="display:inline-block;width:14px;height:3px;background:var(--brand,#5B8DEF);vertical-align:middle;"></i> Model portfolio</span><span><i style="display:inline-block;width:14px;height:3px;background:#9BA3B4;vertical-align:middle;"></i> Equal weight</span></div>
@@ -4753,17 +4793,21 @@ function pbView() {
       <div class="v3-warn ${beat ? '' : 'warn'}" style="margin-top:10px;font-size:12.5px;line-height:1.55;">${icon(beat ? 'check' : 'alertTriangle')}<span>${beat ? 'On this history the model had a better return per unit of risk than equal weight. That is one history, with assets you picked knowing how they turned out, so treat it as a hint, not a result.' : 'On this history the model did not beat simple equal weight on return per unit of risk. That is common: equal weight is hard to beat after costs.'} Average turnover per re-balance: ${(r.wf.avgTurnover * 100).toFixed(0)}% of the portfolio, average holdings: ${r.wf.avgHoldings.toFixed(1)}.</span></div>
     </div>
     <div class="panel panel-pad" style="margin-top:14px;">
-      <div class="panel-head"><h3>${icon('layers')} Model allocation for the latest close</h3><button class="btn btn-outline btn-sm" data-action="pb-csv">Copy as CSV</button></div>
+      <div class="panel-head"><h3>${icon('layers')} ${r.mode === 'strategies' ? 'Model split of your capital between strategies' : 'Model allocation for the latest close'}</h3><button class="btn btn-outline btn-sm" data-action="pb-csv">Copy as CSV</button></div>
+      ${r.mode === 'strategies' ? `<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:480px;"><thead><tr class="faint" style="font-size:10.5px;text-align:right;"><th style="text-align:left;padding:6px 8px;">Strategy</th><th style="padding:6px 8px;">Share of capital</th><th style="padding:6px 8px;">Amount</th><th style="padding:6px 8px;">Days with a closed trade</th></tr></thead><tbody>
+      ${rows.map(x => `<tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;"><b>${esc(x.s)}</b><div class="faint" style="font-size:11px;">${esc(r.meta[x.i])}</div></td><td class="mono" style="padding:8px;">${(x.w * 100).toFixed(1)}%</td><td class="mono" style="padding:8px;">$${(x.w * r.capital).toFixed(2)}</td><td class="mono" style="padding:8px;">${(r.active[x.i] * 100).toFixed(0)}%</td></tr>`).join('')}</tbody></table></div>
+      <div class="faint" style="font-size:11.5px;margin-top:8px;">Model's own estimate of this mix's yearly volatility: ${(r.now.vol * 100).toFixed(1)}%. ${r.dropped.length ? 'Left out for too few trades: ' + esc(r.dropped.join(', ')) + '. ' : ''}Capital is split across strategies only; each strategy still sizes its own trades.</div>` : `
       <div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:480px;"><thead><tr class="faint" style="font-size:10.5px;text-align:right;"><th style="text-align:left;padding:6px 8px;">Asset</th><th style="padding:6px 8px;">Weight</th><th style="padding:6px 8px;">Price</th><th style="padding:6px 8px;">Whole shares</th><th style="padding:6px 8px;">Amount</th></tr></thead><tbody>
       ${rows.map(x => `<tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;"><b>${esc(x.s)}</b></td><td class="mono" style="padding:8px;">${(x.w * 100).toFixed(1)}%</td><td class="mono" style="padding:8px;">$${r.prices[x.i].toFixed(2)}</td><td class="mono" style="padding:8px;">${r.sh.shares[x.i]}</td><td class="mono" style="padding:8px;">$${(r.sh.shares[x.i] * r.prices[x.i]).toFixed(2)}</td></tr>`).join('')}
       <tr style="text-align:right;border-top:1px solid var(--border-soft);"><td style="text-align:left;padding:8px;" class="faint">Left as cash (rounding to whole shares)</td><td></td><td></td><td></td><td class="mono" style="padding:8px;">$${r.sh.cash.toFixed(2)}</td></tr></tbody></table></div>
-      <div class="faint" style="font-size:11.5px;margin-top:8px;">Model's own estimate of this mix's yearly volatility: ${(r.now.vol * 100).toFixed(1)}%. ${r.dropped.length ? 'Left out for too little history: ' + esc(r.dropped.join(', ')) + '.' : ''}</div>
+      <div class="faint" style="font-size:11.5px;margin-top:8px;">Model's own estimate of this mix's yearly volatility: ${(r.now.vol * 100).toFixed(1)}%. ${r.dropped.length ? 'Left out for too little history: ' + esc(r.dropped.join(', ')) + '.' : ''}</div>`}
     </div>`;
   }
   return `<div class="v3-warn warn" style="margin-bottom:14px;font-size:12.5px;line-height:1.6;">${icon('alertTriangle')}<span><b>Research tool, not advice and not an order.</b> This page shows what a rules-based model would hold and how that rule would have done on past prices. It does not place trades. Past results do not predict future ones, you can lose money, and VaticTrader does not know your situation. Talk to a licensed adviser before investing real money.</span></div>
   <div class="panel panel-pad">
     <div class="panel-head"><h3>${icon('layers')} Portfolio Builder</h3><span class="badge badge-info">Multi-asset · whole shares · costs included</span></div>
     <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 12px;">Pick a basket of assets and the model chooses how much of each to hold, re-balancing on a schedule and counting trading costs. It is built on the idea in the multi-period portfolio paper (choose a few assets each period, charge costs, buy whole shares), but with simple statistics instead of the paper's neural-network forecasts, so it is easier to check and less likely to over-fit. The paper's headline return is not reproduced here.</p>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"><button class="asset-pill ${PB.mode !== 'strategies' ? 'on' : ''}" data-action="pb-mode" data-mode="tickers">Assets are tickers</button><button class="asset-pill ${PB.mode === 'strategies' ? 'on' : ''}" data-action="pb-mode" data-mode="strategies">Assets are my strategies</button></div>
     ${inputs}
     <div style="display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap;"><button class="btn btn-primary" data-action="pb-run" ${PB.running ? 'disabled' : ''}>${icon('play')} ${PB.running ? 'Working...' : 'Build portfolio and test it'}</button><span id="pb-progress" class="faint" style="font-size:12.5px;">${esc(PB.progress)}</span></div>
     ${PB.error ? `<div class="form-error" style="margin-top:10px;">${esc(PB.error)}</div>` : ''}
@@ -4771,6 +4815,7 @@ function pbView() {
 }
 function pbField(t, field) {
   const k = field.slice(3), num = parseFloat(t.value);
+  if (k === 'strat') { if (!PB.stratIds) { PB.stratIds = {}; (State.user.strategies || []).filter(pbEligible).forEach(x => { PB.stratIds[x.id] = true; }); } PB.stratIds[t.getAttribute('data-id')] = t.checked; return true; }
   if (k === 'symbols') PB.symbols = t.value;
   else if (k === 'objective') PB.objective = t.value === 'minvol' ? 'minvol' : 'sharpe';
   else if (isFinite(num)) PB[k] = num;
@@ -12197,6 +12242,7 @@ function onDelegatedClick(e) {
     }
     case 'tb-run': tuneBatchStart(); break;
     case 'pb-run': pbRun(); break;
+    case 'pb-mode': PB.mode = el.getAttribute('data-mode') === 'strategies' ? 'strategies' : 'tickers'; PB.result = null; PB.error = ''; render(); break;
     case 'pb-csv': { const c = pbCsv(); if (c) { try { navigator.clipboard.writeText(c); toast('Allocation copied as CSV.', 'ok'); } catch (e) { toast('Could not copy. Select the table instead.', 'err'); } } break; }
     case 'tb-stop': tuneBatchState().cancel = true; break;
     case 'tune-run': tuneStart(el.getAttribute('data-tkey')); break;
