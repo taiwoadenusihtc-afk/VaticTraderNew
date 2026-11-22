@@ -1,7 +1,7 @@
 // Local mock of Alpaca REST + data WebSocket. Synthetic prices only. Not the real service.
 const http = require('http');
 const { WebSocketServer } = require('ws');
-const S = { price: { TEST: 100 }, positions: {}, orders: [], closed: [], seq: 1, barsReqs: [], sockets: new Set(), authLog: [], rejectKeys: new Set(), limitKeys: new Set() };
+const S = { price: { TEST: 100 }, positions: {}, orders: [], closed: [], seq: 1, barsReqs: [], sockets: new Set(), authLog: [], rejectKeys: new Set(), open: [], holdQty: true, delLog: [], limitKeys: new Set() };
 function bars(sym) {
   // flat zig-zag history so RSI is mid-range until a tick pushes it
   const out = []; const now = Date.now();
@@ -15,11 +15,13 @@ const srv = http.createServer((req, res) => {
     const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
     const key = req.headers['apca-api-key-id'];
     if (p.startsWith('/ctl/')) {
-      if (p === '/ctl/state') return send(200, { orders: S.orders, closed: S.closed, positions: S.positions, barsReqs: S.barsReqs, authLog: S.authLog });
+      if (p === '/ctl/state') return send(200, { orders: S.orders, closed: S.closed, positions: S.positions, barsReqs: S.barsReqs, authLog: S.authLog, delLog: S.delLog, open: S.open });
       if (p === '/ctl/price') { const j = JSON.parse(body); S.price[j.sym] = j.price; for (const w of S.sockets) if (w.subs && w.subs.has(j.sym) && w.authed) w.send(JSON.stringify([{ T: 't', S: j.sym, p: j.price, s: 100, t: new Date().toISOString() }])); return send(200, { ok: true, n: S.sockets.size }); }
       if (p === '/ctl/drop') { for (const w of S.sockets) w.terminate(); return send(200, { ok: true }); }
       if (p === '/ctl/limit') { const j = JSON.parse(body); S.limitKeys.add(j.key); return send(200, {}); }
-      if (p === '/ctl/reset') { S.orders = []; S.closed = []; S.positions = {}; return send(200, {}); }
+      if (p === '/ctl/stuck') { S.stuck = !!JSON.parse(body||'{}').on; return send(200, {}); }
+      if (p === '/ctl/seedpos') { const b = JSON.parse(body); S.positions[b.sym] = { symbol: b.sym, qty: '10', side: 'buy', avg_entry_price: '100', current_price: '100' }; S.open.push({ id: 'seed-1', symbol: b.sym, legs: [{ id: 'seed-leg', symbol: b.sym }] }); return send(200, {}); }
+      if (p === '/ctl/reset') { S.orders = []; S.closed = []; S.open = []; S.delLog = []; S.positions = {}; return send(200, {}); }
     }
     if (p === '/v2/account') return send(200, { account_number: 'MOCK1', status: 'ACTIVE', currency: 'USD', cash: '100000', buying_power: '200000', portfolio_value: '100000', equity: '100000', last_equity: '100000', trading_blocked: false, multiplier: '2' });
     let m;
@@ -31,12 +33,15 @@ const srv = http.createServer((req, res) => {
     if (p === '/v2/orders' && req.method === 'POST') {
       const o = JSON.parse(body); const id = 'ord-' + (S.seq++); const px = S.price[o.symbol];
       S.orders.push({ id, ...o, fill: px }); S.positions[o.symbol] = { symbol: o.symbol, qty: o.qty, side: o.side, avg_entry_price: String(px), current_price: String(px) };
+      if (o.order_class === 'bracket' && S.holdQty) { const l1 = 'leg-' + (S.seq++), l2 = 'leg-' + (S.seq++); S.open.push({ id, symbol: o.symbol, status: 'filled_parent', legs: [{ id: l1, symbol: o.symbol, status: 'new' }, { id: l2, symbol: o.symbol, status: 'new' }] }); }
       return send(200, { id, status: 'accepted' });
     }
+    if (p === '/v2/orders' && u.searchParams.get('status') === 'open') { const sy = u.searchParams.get('symbols'); return send(200, S.open.filter(o => !sy || o.symbol === sy)); }
     if (p === '/v2/orders') return send(200, S.closed);
+    if ((m = p.match(/^\/v2\/orders\/([^/]+)$/)) && req.method === 'DELETE') { const id = m[1]; S.delLog.push(id); if (S.stuck) return send(204, {}); S.open = S.open.filter(o => o.id !== id && !(o.legs || []).some(l => l.id === id)); return send(204, {}); }
     if ((m = p.match(/^\/v2\/positions\/([^/]+)$/))) {
       const sym = m[1];
-      if (req.method === 'DELETE') { if (!S.positions[sym]) return send(404, { message: 'position does not exist' }); const id = 'ord-' + (S.seq++); S.closed.unshift({ id, status: 'filled', filled_avg_price: String(S.price[sym]), symbol: sym }); delete S.positions[sym]; return send(200, { id }); }
+      if (req.method === 'DELETE') { if (S.positions[sym] && S.open.some(o => o.symbol === sym)) return send(403, { message: 'insufficient qty available for order (requested: ' + S.positions[sym].qty + ', available: 0)', code: 40310000 }); if (!S.positions[sym]) return send(404, { message: 'position does not exist' }); const id = 'ord-' + (S.seq++); S.closed.unshift({ id, status: 'filled', filled_avg_price: String(S.price[sym]), symbol: sym }); delete S.positions[sym]; return send(200, { id }); }
       if (!S.positions[sym]) return send(404, { message: 'position does not exist' });
       S.positions[sym].current_price = String(S.price[sym]); return send(200, S.positions[sym]);
     }

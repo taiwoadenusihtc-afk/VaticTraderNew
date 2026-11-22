@@ -214,6 +214,38 @@ async function alpacaRequest(baseUrl, apiKeyId, apiSecretKey, urlPath, options =
   });
 }
 
+// Closing a position at Alpaca fails with "insufficient qty available" (403) while
+// open orders (the bracket take-profit / stop legs, or any resting order) still hold
+// the shares. So: try the close; if refused, cancel the open orders for that symbol,
+// give Alpaca a moment to release the shares, then try again. Returns the final
+// response plus what was cancelled, so callers can tell the user the protective
+// orders are gone if the close still fails.
+async function alpacaClosePositionRobust(baseUrl, apiKeyId, apiSecretKey, symbol) {
+  const path = `/v2/positions/${encodeURIComponent(symbol)}`;
+  let res = await alpacaRequest(baseUrl, apiKeyId, apiSecretKey, path, { method: 'DELETE' });
+  let cancelled = 0;
+  if (res.ok || res.status === 404 || res.status >= 500 && res.status !== 503) return { res, cancelled };
+  const firstBody = await res.clone().json().catch(() => ({}));
+  try {
+    const q = `/v2/orders?status=open&limit=100&nested=true&symbols=${encodeURIComponent(symbol)}`;
+    const lr = await alpacaRequest(baseUrl, apiKeyId, apiSecretKey, q);
+    const list = lr.ok ? await lr.json().catch(() => []) : [];
+    const ids = [];
+    (Array.isArray(list) ? list : []).forEach(o => { if (o && o.id) { ids.push(o.id); (o.legs || []).forEach(l => l && l.id && ids.push(l.id)); } });
+    for (const id of ids) {
+      const dr = await alpacaRequest(baseUrl, apiKeyId, apiSecretKey, `/v2/orders/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (dr.ok || dr.status === 204) cancelled++;
+    }
+  } catch (e) { console.error('close: cancel open orders failed:', e.message); }
+  if (cancelled === 0) return { res, cancelled, firstBody };
+  for (let i = 0; i < 4; i++) {
+    await new Promise(r => setTimeout(r, i === 0 ? 400 : 800));
+    res = await alpacaRequest(baseUrl, apiKeyId, apiSecretKey, path, { method: 'DELETE' });
+    if (res.ok || res.status === 404) break;
+  }
+  return { res, cancelled, firstBody };
+}
+
 
 // =========================================================================
 // REAL LIVE EXECUTION ENGINE
@@ -2555,10 +2587,14 @@ async function closeDeploymentPosition(username, dep, reason) {
     // process, it needs to surface as a normal, catchable failure for this
     // one request like everything else in this block.
     const apiSecretKey = decryptSecret(credRes.rows[0].api_secret_enc);
-    const closeRes = await alpacaRequest(baseUrl, apiKeyId, apiSecretKey, `/v2/positions/${encodeURIComponent(dep.symbol)}`, { method: 'DELETE' });
+    const cl = await alpacaClosePositionRobust(baseUrl, apiKeyId, apiSecretKey, dep.symbol);
+    const closeRes = cl.res;
     if (!closeRes.ok && closeRes.status !== 404) {
       const errBody = await closeRes.json().catch(() => ({}));
-      return { ok: false, status: 502, error: errBody.message || 'Alpaca could not close the position.' };
+      const why = errBody.message || (cl.firstBody && cl.firstBody.message) || 'Alpaca could not close the position.';
+      const warn = cl.cancelled ? ' Note: its take-profit/stop orders were cancelled while trying, so the position is currently unprotected.' : '';
+      await pool.query(`UPDATE live_deployments SET last_error=$2 WHERE id=$1`, [dep.id, ('Close failed: ' + why).slice(0, 300)]).catch(() => {});
+      return { ok: false, status: closeRes.status >= 400 && closeRes.status < 500 ? 422 : 502, error: 'Alpaca refused to close ' + dep.symbol + ': ' + why + warn };
     }
     await pool.query(`UPDATE live_deployments SET status='closed', closed_at=now() WHERE id=$1`, [dep.id]);
     const adapter = getBrokerAdapter(dep.broker);
@@ -2621,8 +2657,9 @@ app.post('/api/portfolio/close-position', requireAuth, async (req, res) => {
     const c = credRes.rows[0], secret = decryptSecret(c.api_secret_enc);
     const pr = await alpacaRequest(c.base_url, c.api_key_id, secret, `/v2/positions/${encodeURIComponent(symbol)}`);
     const pos = pr.ok ? await pr.json() : null;
-    const cr = await alpacaRequest(c.base_url, c.api_key_id, secret, `/v2/positions/${encodeURIComponent(symbol)}`, { method: 'DELETE' });
-    if (!cr.ok && cr.status !== 404) { const b = await cr.json().catch(() => ({})); return res.status(502).json({ error: b.message || 'Your broker could not close the position.' }); }
+    const clr = await alpacaClosePositionRobust(c.base_url, c.api_key_id, secret, symbol);
+    const cr = clr.res;
+    if (!cr.ok && cr.status !== 404) { const b = await cr.json().catch(() => ({})); const why = b.message || (clr.firstBody && clr.firstBody.message) || 'Your broker could not close the position.'; return res.status(cr.status >= 400 && cr.status < 500 ? 422 : 502).json({ error: 'Alpaca refused to close ' + symbol + ': ' + why + (clr.cancelled ? ' Its take-profit/stop orders were cancelled while trying, so the position is currently unprotected.' : '') }); }
     res.json({ ok: true, symbol, qty: pos ? parseFloat(pos.qty) : null, entryPrice: pos ? parseFloat(pos.avg_entry_price) : null, exitPrice: pos ? parseFloat(pos.current_price) : null, pnl: pos ? Math.round(parseFloat(pos.unrealized_pl) * 100) / 100 : null, reason: 'manual', note: 'Closed at your broker. This position was not opened by a VaticTrader strategy.' });
   } catch (e) { res.status(502).json({ error: 'Could not reach your broker to close the position.' }); }
 });
@@ -4067,7 +4104,7 @@ BrokerAdapters.alpaca = {
     return alpacaRequest(creds.baseUrl, creds.primary, creds.secretPlain, `/v2/positions/${encodeURIComponent(symbol)}`);
   },
   async closePosition(creds, symbol) {
-    return alpacaRequest(creds.baseUrl, creds.primary, creds.secretPlain, `/v2/positions/${encodeURIComponent(symbol)}`, { method: 'DELETE' });
+    return (await alpacaClosePositionRobust(creds.baseUrl, creds.primary, creds.secretPlain, symbol)).res;
   },
   // Finds the real fill price of whichever order actually closed the
   // position (the bracket's take-profit or stop-loss leg, or a manual

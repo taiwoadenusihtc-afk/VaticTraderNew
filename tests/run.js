@@ -54,7 +54,7 @@ const tick = (price) => mock('/ctl/price', { sym: 'TEST', price });
     await tick(112); await sleep(1100); await tick(113); await sleep(1100);
     d = (await pool.query(`SELECT trail_peak FROM live_deployments WHERE username=$1`, [uname])).rows[0]; ok(Math.abs(parseFloat(d.trail_peak) - 113) < 0.01, 'trail peak follows the stream (' + d.trail_peak + ')');
     await tick(111.5); await sleep(1500);
-    ms = await mock('/ctl/state'); ok(ms.closed.length === 1, 'trailing stop closed the position at the broker');
+    ms = await mock('/ctl/state'); ok(ms.closed.length === 1, 'trailing stop closed the position at the broker (bracket legs were holding the shares)'); ok(ms.delLog && ms.delLog.length >= 2, 'bracket legs were cancelled to release shares (' + (ms.delLog||[]).length + ')');
     d = (await pool.query(`SELECT status FROM live_deployments WHERE username=$1`, [uname])).rows[0]; ok(d.status === 'closed', 'deployment closed');
     const tl = (await pool.query(`SELECT close_reason, status FROM live_trade_log WHERE username=$1`, [uname])).rows[0]; ok(tl && tl.close_reason === 'trailing_stop', 'trade log reason = trailing_stop');
     // F: reconnect after the socket drops
