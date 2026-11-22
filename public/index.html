@@ -492,6 +492,31 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;letter-spac
 .at-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} .at-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden;} .at-bar i{display:block;height:100%;border-radius:3px;background:var(--c);} .at-row b{text-align:end;font-size:12px;color:var(--text-dim);}
 
 /* ---- V8: broker hub + code export ---- */
+.bk-head{display:flex;gap:24px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:radial-gradient(120% 140% at 0% 0%,rgba(91,141,239,.10),transparent 60%);margin-bottom:12px;}
+.bk-head h3{font-size:18px;margin:0 0 6px;} .bk-head p{margin:0;font-size:13px;line-height:1.6;max-width:560px;}
+.bk-nums{display:flex;gap:10px;} .bk-nums>div{min-width:104px;padding:12px 16px;border-radius:12px;background:var(--panel-alt);border:1px solid var(--border-soft);display:flex;flex-direction:column;gap:2px;}
+.bk-nums b{font-size:24px;line-height:1.1;} .bk-nums span{font-size:11.5px;color:var(--text-faint);}
+.bk-how{margin-bottom:6px;border:1px solid var(--border-soft);border-radius:12px;background:var(--panel);padding:0 16px;}
+.bk-how summary{cursor:pointer;padding:12px 0;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;list-style:none;} .bk-how summary::-webkit-details-marker{display:none;}
+.bk-how p{font-size:12.5px;line-height:1.65;margin:0 0 14px;}
+.bk-sec{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:24px 0 12px;} .bk-sec h3{font-size:15px;margin:0;}
+.bk-conn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;}
+.bk-conn{padding:18px;display:flex;flex-direction:column;gap:14px;border-top:3px solid var(--long);box-shadow:0 10px 30px -16px rgba(46,217,168,.45);}
+.bk-conn-top,.bk-av-top{display:flex;align-items:center;gap:12px;} .bk-conn h4,.bk-av h4{font-size:15px;margin:0;}
+.bk-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;} .bk-t{padding:10px 12px;border-radius:10px;background:var(--panel-alt);display:flex;flex-direction:column;gap:3px;min-width:0;}
+.bk-t .l{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);} .bk-t .v{font-family:var(--font-mono);font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;}
+.bk-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;} .bk-acts .btn{flex:1 1 auto;justify-content:center;}
+.bk-lvl{font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;align-self:flex-start;padding:3px 10px;border-radius:20px;}
+.bk-lvl.auto{background:rgba(46,217,168,.12);color:var(--long);} .bk-lvl.test{background:rgba(91,141,239,.14);color:#8DB0F5;} .bk-lvl.read{background:var(--panel-alt);color:var(--text-dim);}
+.bk-av-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;}
+.bk-av{padding:16px;display:flex;flex-direction:column;gap:12px;border-top:3px solid var(--bc,var(--border));}
+.bk-av .desc{font-size:12px;color:var(--text-faint);line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:4.65em;}
+.bk-av .btn-block{margin-top:auto;} .bk-kind{font-size:11.5px;color:var(--text-faint);}
+.bk-filters{display:flex;gap:6px;flex-wrap:wrap;} .bk-chip{border:1px solid var(--border);background:var(--panel);color:var(--text-dim);font:inherit;font-size:12px;padding:6px 13px;border-radius:20px;cursor:pointer;}
+.bk-chip:hover{border-color:var(--brand-dim);color:var(--text);} .bk-chip.on{background:var(--brand);border-color:var(--brand);color:#fff;}
+.bk-soon-row{display:flex;flex-wrap:wrap;gap:8px;} .bk-soonchip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:30px;border:1px dashed var(--border);background:var(--panel);font-size:12.5px;color:var(--text-dim);}
+.bk-soonchip i{font-style:normal;min-width:26px;height:26px;padding:0 5px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;filter:grayscale(.6);}
+@media(max-width:640px){.bk-nums{width:100%}.bk-nums>div{flex:1;min-width:0}.bk-conn-grid{grid-template-columns:1fr}.bk-tiles{gap:6px}.bk-t{padding:8px 9px}.bk-t .v{font-size:12.5px}}
 .bk-hero{margin-bottom:16px;background:radial-gradient(120% 120% at 50% 0%,rgba(91,141,239,.08),transparent 60%);}
 .bk-svg{width:100%;height:auto;max-height:260px;display:block;}
 .bk-ln{stroke-width:1.6;fill:none;}
@@ -575,7 +600,7 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;letter-spac
 .fw-lbr .bar{height:5px;border-radius:3px;background:rgba(255,255,255,.06);margin-top:4px;overflow:hidden;}.fw-lbr .bar div{height:100%;border-radius:3px;}
 .fw-lbr .r{text-align:right;font-family:var(--font-mono);font-weight:700;}
 .al-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0 14px;}
-.al-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;}
+.al-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;}
 .al-card{position:relative;display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--panel-alt);overflow:hidden;}
 .al-card:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--sc,var(--border));}
 .al-card.active{--sc:var(--long);}.al-card.fired{--sc:var(--brand,#FF4FA3);background:linear-gradient(150deg,rgba(255,79,163,.1),var(--panel-alt) 60%);}.al-card.paused{--sc:var(--text-faint);opacity:.8;}
@@ -8401,41 +8426,64 @@ function updateMarketsResults() {
 
 /* -------------------------------- BROKER CONNECTIONS ----------------------------- */
 function bkCaps(b) { return !b.real ? 0 : bkCan(b).filter(Boolean).length; }
-function bkHubSvg() {
-  const n = BROKERS.length, cx = 320, cy = 105, rx = 262, ry = 80;
-  const isC = (b) => { const c = State.user.brokers[b.id]; return !!(c && c.connected && c.real); };
-  let lines = '', nodes = '';
-  BROKERS.forEach((b, k) => {
-    const th = (2 * Math.PI * k / n) - Math.PI / 2, X = Math.round(cx + rx * Math.cos(th)), Y = Math.round(cy + ry * Math.sin(th));
-    const on = isC(b), open = !!b.real;
-    lines += `<path d="M${cx} ${cy} L${X} ${Y}" class="bk-ln ${on ? 'on' : open ? 'real' : 'soon'}"/>`;
-    nodes += `<g class="bk-nd ${on ? 'on' : open ? 'open' : 'soon'}" transform="translate(${X} ${Y})"><title>${esc(b.name)}</title><circle r="15" fill="${on ? 'var(--long)' : 'var(--panel-alt)'}" stroke="${on ? 'var(--long)' : open ? '#5B8DEF' : 'var(--border)'}" stroke-width="${open ? 2 : 1}" ${open ? '' : 'stroke-dasharray="3 3"'}/><text y="3.5" text-anchor="middle" class="bk-nis" ${on ? 'fill="#06231a"' : ''}>${esc(b.initials)}</text></g>`;
-  });
-  return `<svg class="bk-svg" viewBox="0 0 640 210" role="img" aria-label="${T3('Broker connection map', 'خريطة اتصال الوسطاء')}"><ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" class="bk-orbit"/>${lines}
-    <g transform="translate(${cx} ${cy})"><circle r="38" class="bk-core-r"/><circle r="30" class="bk-core"/><path d="M-12 8l8-14 6 9 5-7 9 12z" fill="#0B0F17" opacity=".85"/><text y="58" text-anchor="middle" class="bk-nl">VaticTrader</text></g>${nodes}</svg>`;
+const BK_KIND = { alpaca: 'stocks', ibkr: 'stocks', tradestation: 'stocks', trading212: 'stocks', schwab: 'stocks', saxo: 'stocks', etoro: 'stocks', ig: 'cfd', coinbase: 'crypto', binance: 'crypto', kraken: 'crypto' };
+function bkKindLabel(b) { return ({ stocks: T3('Stocks & ETFs', 'أسهم وصناديق'), crypto: T3('Crypto', 'عملات رقمية'), cfd: T3('CFDs & spread bets', 'عقود الفروقات') })[BK_KIND[b.id]] || ''; }
+function bkLevel(b) {
+  if (b.realScope === 'full') return { cls: 'auto', txt: T3('Automated live trading', 'تداول آلي مباشر') };
+  return bkCan(b)[2] ? { cls: 'test', txt: T3('Account data + test order', 'بيانات الحساب + أمر تجريبي') } : { cls: 'read', txt: T3('Account data only', 'بيانات الحساب فقط') };
 }
-function bkRing(v, tot, color, label) {
-  const R = 20, C = 2 * Math.PI * R, f = tot ? Math.min(1, v / tot) : 0;
-  return `<div class="bk-stat"><svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="${R}" fill="none" stroke="var(--border)" stroke-width="5"/><circle cx="26" cy="26" r="${R}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(C * f).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 26 26)"/><text x="26" y="30" text-anchor="middle" class="bk-sv">${v}</text></svg><span>${label}</span></div>`;
+function bkStat(l, v) { return `<div class="bk-t"><span class="l">${l}</span><span class="v">${v}</span></div>`; }
+function bkConnectedCard(b) {
+  const conn = State.user.brokers[b.id], lv = bkLevel(b);
+  const tiles = b.id === 'alpaca'
+    ? bkStat(T3('Cash', 'النقد'), '$' + Number(conn.cash).toLocaleString()) + bkStat(T3('Buying power', 'القوة الشرائية'), '$' + Number(conn.buyingPower).toLocaleString()) + bkStat(T3('Status', 'الحالة'), esc(conn.status))
+    : (b.id === 'etoro' && conn.credit !== undefined) ? bkStat(T3('Demo credit', 'رصيد تجريبي'), '$' + Number(conn.credit).toLocaleString())
+    : bkStat(T3('Equity', 'الرصيد'), v8Cur(conn.equity, conn.currency)) + bkStat(T3('Cash', 'النقد'), v8Cur(conn.cash, conn.currency)) + bkStat(T3('Mode', 'الوضع'), esc(conn.mode || 'live'));
+  const test = bkCan(b)[2] ? `<button class="btn btn-outline btn-sm" data-action="broker-test-order" data-id="${b.id}">${icon('zap')} ${['alpaca', 'etoro', 'trading212'].includes(b.id) ? T3('Send test order', 'إرسال أمر تجريبي') : T3('Check an order', 'فحص أمر')}</button>` : '';
+  return `<div class="panel bk-conn" style="--bc:${b.color};">
+    <div class="bk-conn-top"><div class="broker-logo" style="background:${b.color}22;color:${b.color};">${b.initials}</div>
+      <div style="min-width:0;flex:1;"><h4>${esc(b.name)}</h4><div class="mono faint" style="font-size:11.5px;">${esc(conn.accountLabel || '')}</div></div>
+      <span class="badge badge-long"><span class="dot"></span>${T3('Connected', 'متصل')}</span></div>
+    <div class="bk-tiles">${tiles}</div>
+    ${conn.note ? `<div class="faint" style="font-size:11.5px;line-height:1.5;">${esc(conn.note)}</div>` : ''}
+    <div class="bk-lvl ${lv.cls}">${lv.txt}${b.realScope !== 'full' ? ' · ' + T3('automated live trading runs through Alpaca today', 'التداول الآلي المباشر عبر ألباكا حاليًا') : ''}</div>
+    <div class="bk-acts">${test}<button class="btn btn-ghost btn-sm" data-action="refresh-broker" data-id="${b.id}">${icon('pulse')} ${T3('Refresh', 'تحديث')}</button><button class="btn btn-ghost btn-sm bk-disc" data-action="disconnect-real-broker" data-id="${b.id}">${T3('Disconnect', 'فصل')}</button></div>
+  </div>`;
+}
+function bkAvailCard(b) {
+  const lv = bkLevel(b), cc = (State.brokerCaps || {})[b.id], need = cc && cc.kind === 'oauth' && !cc.configured, oauth = BROKER_CONNECT[b.id] && BROKER_CONNECT[b.id].kind === 'oauth';
+  return `<div class="panel bk-av" style="--bc:${b.color};">
+    <div class="bk-av-top"><div class="broker-logo" style="background:${b.color}22;color:${b.color};">${b.initials}</div><div style="min-width:0;"><h4>${esc(b.name)}</h4><span class="bk-kind">${bkKindLabel(b)}</span></div></div>
+    <div class="desc" title="${esc(b.desc)}">${esc(b.desc)}</div>
+    <div class="bk-lvl ${lv.cls}">${lv.txt}</div>
+    ${need ? `<div class="hint" style="margin:0;font-size:11.5px;">${T3('Needs setup on this server first', 'يحتاج إعدادًا على الخادم أولًا')}</div>` : ''}
+    <button class="btn btn-outline btn-sm btn-block" data-action="open-connect-modal" data-id="${b.id}">${icon('plus')} ${need ? T3('See how to set up', 'كيفية الإعداد') : oauth ? T3('Sign in', 'تسجيل الدخول') : T3('Connect', 'ربط')}</button>
+  </div>`;
 }
 function renderBroker() {
-  const real = BROKERS.filter(b => b.real), soon = BROKERS.filter(b => !b.real);
-  const nConn = BROKERS.filter(b => { const c = State.user.brokers[b.id]; return c && c.connected && c.real; }).length;
+  const real = BROKERS.filter(b => b.real), soon = BROKERS.filter(b => !b.real && b.id !== 'sahm');
+  const isConn = (b) => { const c = State.user.brokers[b.id]; return !!(c && c.connected && c.real); };
+  const conn = real.filter(isConn), avail = real.filter(b => !isConn(b));
+  const f = State.bkFilter || 'all';
+  const filters = [['all', T3('All', 'الكل')], ['stocks', T3('Stocks & ETFs', 'أسهم وصناديق')], ['crypto', T3('Crypto', 'عملات رقمية')], ['cfd', T3('CFDs', 'عقود الفروقات')], ['auto', T3('Automated trading', 'تداول آلي')]];
+  const shown = avail.filter(b => f === 'all' || (f === 'auto' ? b.realScope === 'full' : BK_KIND[b.id] === f));
+  const alpacaOpen = real.find(b => b.id === 'alpaca' && !isConn(b));
+  const hero = conn.length
+    ? `<div><h3>${T3('Your brokers', 'وسطاؤك')}</h3><p class="muted">${T3(`${conn.length} connected. Your strategies trade through ${conn.map(b => b.name).join(', ')}.`, `${conn.length} متصل. تتداول استراتيجياتك عبر ${conn.map(b => b.name).join('، ')}.`)}</p></div>`
+    : `<div><h3>${T3('Connect your first broker', 'اربط أول وسيط')}</h3><p class="muted">${T3('Alpaca is the quickest start: a free paper account with fake money and real prices, and the only one with automated live trading today.', 'ألباكا أسرع بداية: حساب ورقي مجاني بمال وهمي وأسعار حقيقية، وهو الوحيد مع التداول الآلي المباشر اليوم.')}</p>${alpacaOpen ? `<button class="btn btn-primary btn-sm" style="margin-top:12px;" data-action="open-connect-modal" data-id="alpaca">${icon('plus')} ${T3('Connect Alpaca', 'ربط ألباكا')}</button>` : ''}</div>`;
   return `
-  <section class="panel panel-pad bk-hero">
-    <div class="panel-head"><h3>${icon('broker')} ${T3('Connection hub', 'مركز الاتصال')}</h3><span class="badge ${nConn ? 'badge-long' : 'badge-dim'}">${nConn ? T3(nConn + ' connected', nConn + ' متصل') : T3('Nothing connected', 'لا اتصال')}</span></div>
-    ${bkHubSvg()}
-    <div class="bk-stats">${bkRing(nConn, real.length, 'var(--long)', T3('Connected', 'متصل'))}${bkRing(real.length, BROKERS.length, '#5B8DEF', T3('Real API today', 'واجهة حقيقية اليوم'))}${bkRing(soon.length, BROKERS.length, '#8677F5', T3('Coming soon', 'قريبًا'))}
-      <div class="bk-key"><span><i class="k1"></i>${T3('Connected', 'متصل')}</span><span><i class="k2"></i>${T3('Available to connect', 'متاح للربط')}</span><span><i class="k3"></i>${T3('Coming soon, not linkable yet', 'قريبًا، لا يمكن ربطه بعد')}</span></div></div>
+  <section class="panel panel-pad bk-head">
+    ${hero}
+    <div class="bk-nums"><div><b class="mono" style="color:var(--long);">${conn.length}</b><span>${T3('Connected', 'متصل')}</span></div><div><b class="mono">${avail.length}</b><span>${T3('Ready to connect', 'جاهز للربط')}</span></div><div><b class="mono">${soon.length}</b><span>${T3('Coming soon', 'قريبًا')}</span></div></div>
   </section>
-  <div class="panel panel-pad partner-disclosure">
-    <div class="panel-head"><h3>${icon('shield')} How this works</h3></div>
-    <p class="muted" style="font-size:13px;line-height:1.6;margin:0;">VaticTrader is <b>not a broker-dealer</b> and doesn't hold client funds or route orders itself. Live trading is designed to run entirely through licensed, regulated partner brokers around the world, whether that's Saudi Arabia's CMA/SAMA, the UAE's SCA/DFSA, the US SEC/FINRA, the UK's FCA, the EU's MiFID II regulators, or an equivalent elsewhere, you keep your account and your money with them, and VaticTrader only sends the signals your strategy generates. Demo trading below is fully simulated and available regardless of broker status.</p>
-  </div>
-  <div class="panel-head" style="margin:22px 0 12px;"><h3>${T3('Available now', 'متاح الآن')}</h3></div>
-  <div class="broker-grid">${real.map(renderBrokerCard).join('')}</div>
-  <div class="panel-head" style="margin:26px 0 12px;"><h3>${T3('Coming soon', 'قريبًا')}</h3><span class="faint" style="font-size:12px;">${T3('No real connection yet. Nothing here is simulated.', 'لا اتصال حقيقي بعد. لا شيء هنا محاكى.')}</span></div>
-  <div class="broker-grid bk-soon-grid">${soon.map(renderBrokerCard).join('')}</div>
+  <details class="bk-how"><summary>${icon('shield')} ${T3('How this works: VaticTrader is not a broker', 'كيف يعمل: فاتيك تريدر ليس وسيطًا')}</summary>
+    <p class="muted">${T3('VaticTrader is <b>not a broker-dealer</b> and does not hold client funds or route orders itself. Live trading runs through licensed, regulated partner brokers (for example Saudi CMA/SAMA, UAE SCA/DFSA, US SEC/FINRA, UK FCA or EU MiFID II regulated firms). You keep your account and your money with the broker, and VaticTrader only sends the signals your strategy generates. Demo trading is simulated and works without a broker.', 'فاتيك تريدر <b>ليس وسيط تداول</b> ولا يحتفظ بأموال العملاء ولا ينفذ الأوامر بنفسه. يتم التداول المباشر عبر وسطاء شركاء مرخصين وخاضعين للرقابة (مثل هيئة السوق المالية السعودية، وهيئة الأوراق المالية والسلع الإماراتية، وSEC/FINRA الأمريكية، وFCA البريطانية، أو جهات MiFID II الأوروبية). تبقى حساباتك وأموالك لدى الوسيط، ويرسل فاتيك تريدر فقط الإشارات التي تولدها استراتيجيتك. التداول التجريبي محاكى ويعمل دون وسيط.')}</p></details>
+  ${conn.length ? `<div class="bk-sec"><h3>${T3('Connected', 'المتصلة')}</h3></div><div class="bk-conn-grid">${conn.map(bkConnectedCard).join('')}</div>` : ''}
+  <div class="bk-sec"><h3>${T3('Available to connect', 'متاحة للربط')}</h3>
+    <div class="bk-filters" role="group" aria-label="${T3('Filter brokers', 'تصفية الوسطاء')}">${filters.map(([k, l]) => `<button type="button" class="bk-chip ${f === k ? 'on' : ''}" data-action="bk-filter" data-k="${k}">${l}</button>`).join('')}</div></div>
+  ${shown.length ? `<div class="bk-av-grid">${shown.map(bkAvailCard).join('')}</div>` : `<div class="panel"><div class="empty-state" style="padding:30px 20px;">${icon('broker')}<p>${T3('No brokers in this group.', 'لا وسطاء في هذه المجموعة.')}</p></div></div>`}
+  <div class="bk-sec"><h3>${T3('Coming soon', 'قريبًا')}</h3><span class="faint" style="font-size:12px;">${T3('No connection yet. Tell us which you want below.', 'لا ربط بعد. أخبرنا بما تريد أدناه.')}</span></div>
+  <div class="bk-soon-row">${soon.map(b => `<span class="bk-soonchip" title="${esc(b.desc)}"><i style="background:${b.color}22;color:${b.color};">${b.initials}</i>${esc(b.name)}</span>`).join('')}</div>
   <div class="panel panel-pad waitlist-cta" style="margin-top:20px;">
     ${renderInAppWaitlist()}
   </div>`;
@@ -12454,6 +12502,7 @@ function onDelegatedClick(e) {
     case 'close-modal': State.modal = null; render(); break;
     case 'confirm-yes': { const cb = State.modal && State.modal.onConfirm; State.modal = null; if (cb) cb(); break; }
 
+    case 'bk-filter': State.bkFilter = el.getAttribute('data-k'); render(); break;
     case 'settings-tab': State.settingsTab = el.getAttribute('data-tab'); render(); if (el.getAttribute('data-tab') === 'plan') loadBillingStatus(); break;
     case 'upgrade-tier': startCheckout(el.getAttribute('data-tier')); break;
     case 'manage-billing': openBillingPortal(); break;

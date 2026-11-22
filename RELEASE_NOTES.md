@@ -23,3 +23,13 @@ add public/vatictrader-overview.mp4 and public/overview-poster.jpg (the old ad f
 ## Landing video
 - The top video in the landing page's video section is now a product overview (about 1:40) recorded from the real app: intro, home, build, backtest, demo and go-live checks, positions and risk limits, portfolio builder, alerts, code export, straight-talk card, end card.
 - Section heading changed to "See VaticTrader in action". The AI-agent comparison ad is kept as a separate file and is not on the site.
+
+## v7 reverted
+- The email and Telegram removal was reverted on request. Email and Telegram alerts, the event toggles and the daily summary work as in v6.
+
+## Brokers tab redesign (v9)
+- New status header (connected / ready / coming soon) with a "Connect Alpaca" call to action when nothing is linked.
+- Connected accounts come first as wide cards with cash, buying power and status tiles plus Test order, Refresh and Disconnect.
+- Available brokers: uniform cards with type, a single capability label, and filter chips (All, Stocks, Crypto, CFDs, Automated trading).
+- Coming soon is a compact chip row. The fictional "Sahm" prototype broker is no longer shown there.
+- "How this works" is a collapsed note. The 24-node orbit diagram is removed. No server change.
