@@ -1666,6 +1666,18 @@ html[dir="rtl"] .nav-item.active{box-shadow:inset -3px 0 0 var(--brand);}
 }
 /* dashboard */
 .dash-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
+.fr-hero{padding:24px;margin-bottom:18px;border-left:3px solid var(--brand,#6aa9ff);}
+.fr-hero h3{font-size:22px;margin:4px 0 6px;letter-spacing:-.01em;}
+.fr-kicker{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brand,#6aa9ff);}
+.fr-chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;}
+.fr-chip{border:1px solid var(--border-soft,rgba(255,255,255,.14));background:transparent;color:inherit;border-radius:999px;padding:6px 12px;font-size:12.5px;cursor:pointer;}
+.fr-chip:hover{border-color:var(--brand,#6aa9ff);}
+.fr-steps{display:flex;gap:14px;flex-wrap:wrap;list-style:none;margin:18px 0 0;padding:0;font-size:12.5px;}
+.fr-steps li{display:flex;gap:8px;align-items:center;flex:1 1 180px;}
+.fr-steps b{display:inline-flex;width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;background:var(--brand,#6aa9ff);color:#0b1020;font-size:12px;flex:none;}
+.fr-banner{margin-bottom:16px;border-left:3px solid var(--brand,#6aa9ff);}
+.fr-banner p{margin:6px 0 12px;font-size:13.5px;line-height:1.6;}
+.fr-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 .dash-head h2{font-family:var(--font-hero);font-weight:700;font-size:26px;margin:0;letter-spacing:-.01em;}
 .dash-head p{margin:4px 0 0;font-size:14px;}
 .dash-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
@@ -2897,6 +2909,7 @@ const State = {
   lastGeneratedCode: null, // { code, tier, maxUses, expiresAt } from the Settings > Plan code generator, re-rendered from state so it survives the render() a toast() triggers right after
   realBars: {}, // cached REAL historical bars per symbol|timeframe (from /api/market/bars), or {unavailable:true}
   useRealData: true, // backtests always run on real market data
+  guardStatus: null,
   riskStatus: null, // risk limits + today's real summary from /api/risk/status
   realPortfolio: null, // real broker account + positions + per-strategy fills from /api/portfolio/real (no simulated figures)
   realizedPnl: 0, // real, accumulated $ P&L from actual closed trades (live_trade_log), the honest basis for the dashboard's equity figure
@@ -2915,6 +2928,8 @@ const State = {
   codeLang: 'pine',
   devExampleLang: 'pine',
   aiGenSummary: null,
+  firstRun: null,
+  tplShowAll: false,
   mcCache: {},
   optimizeGoal: 'totalReturn',
   optimizeCache: {},
@@ -2938,6 +2953,8 @@ function blankDraft() {
     timeframe: '15m',
     direction: 'long',
     entryConditions: [{ id: uid(), indicator: 'rsi', operator: 'is below', value: '30' }],
+    filterConditions: [],
+    eventPause: { enabled: false, rates: true, earnings: true, beforeHours: 2, afterHours: 2 },
     takeProfit: 1.5,
     stopLoss: 0.8,
     trailingStop: false,
@@ -3036,7 +3053,7 @@ function handleUpgradeRequired(data) {
   State.modal = { type: 'upgrade-required', message: data.error };
   render();
 }
-async function saveStrategyChecked(d, isNew, editingId) {
+async function saveStrategyChecked(d, isNew, editingId, opts) {
   if (editingId) {
     const idx = State.user.strategies.findIndex(x => x.id === editingId);
     if (idx > -1) State.user.strategies[idx] = d;
@@ -3052,10 +3069,12 @@ async function saveStrategyChecked(d, isNew, editingId) {
   // saveUser()'s chain) has already reverted the local addition and shown
   // the upgrade modal, no success toast, no navigating away from a save
   // that didn't actually happen.
-  if (!ok) return;
-  State.view = 'strategies'; State.draft = null; State.editingId = null; State.aiGenSummary = null; State.aiGenUsedRealAi = false;
+  if (!ok) return false;
+  if (opts && opts.stay) { if (isNew) { awardXP(15); checkAchievements(); } return true; }
+  State.view = 'strategies'; State.draft = null; State.editingId = null; State.aiGenSummary = null; State.aiGenUsedRealAi = false; State.firstRun = null;
   render(); toast('Strategy saved.', 'ok');
   if (isNew) { awardXP(15); checkAchievements(); }
+  return true;
 }
 async function saveSession() {
   await storeSet('session', JSON.stringify(State.session), false);
@@ -4232,7 +4251,7 @@ function parseStrategyDescription(text) {
   if (found.takeProfit) d.takeProfit = found.takeProfit;
   if (found.stopLoss) d.stopLoss = found.stopLoss;
   matched.push(`risk: +${d.takeProfit}% / -${d.stopLoss}%` + (found.takeProfit || found.stopLoss ? '' : ' (default)'));
-  d.name = (text || '').trim().slice(0, 48).replace(/\s+/g, ' ') || 'Generated strategy';
+  d.name = strategyNameFromText(text);
   return { draft: d, matched };
 }
 
@@ -4293,6 +4312,139 @@ function optimizeStrategy(strat, goal) {
   return { goal, combosTried, top: allResults.slice(0, 5) };
 }
 
+
+/* =============================== ROBUSTNESS SCORE ===============================
+   One 0-100 number for "how fragile is this backtest", built from four checks on real history:
+   trade count, out-of-sample result (the most recent 30%), parameter stability (a grid of nearby settings) and
+   cost sensitivity (how much higher costs it survives). Caps stop one strong part hiding a weak one.
+   It is a guide to fragility, not a forecast: a high score does not mean the strategy will make money. */
+const ROB_W = { trades: 0.20, oos: 0.30, stab: 0.25, cost: 0.25 };
+const robClamp = (x, lo, hi) => Math.max(lo === undefined ? 0 : lo, Math.min(hi === undefined ? 1 : hi, x));
+async function robustnessCompute(spec, bars, rtPct, tk) {
+  const N = bars.length, split = Math.floor(N * TUNE_SPLIT), seed = spec.symbol + '|' + spec.timeframe + '|rob';
+  const strip = (k, v) => (k === 'backtest' || k === 'tradeLog' || k === '_exprCache' || k === 'filterConditions') ? undefined : v;
+  const memo = {};
+  const evalSpec = (sp, mult) => {
+    (sp.entryConditions || []).forEach(c => { delete c._exprCache; });
+    const ck = (sp.entryConditions || []).map(c => (c.indicator === 'sma_cross' || c.indicator === 'ema_cross' || c.indicator === 'breakout') ? c.indicator + ':' + c.value : c.indicator).join('|');
+    const cache = memo[ck] || (memo[ck] = buildIndicatorCache(bars, sp.entryConditions));
+    const run = (m) => simulateStrategyTrades(Object.assign({}, sp, { filterConditions: spec.filterConditions }), bars, cache, seededRandom(seed), rtPct * m / 100).trades;
+    return { base: run(1), hard: run(mult || SCREEN_STRESS) };
+  };
+  const clone = () => JSON.parse(JSON.stringify(spec, strip));
+  const cur = evalSpec(clone());
+  const full = tuneMetrics(cur.base, cur.hard, 0, N + 1), inS = tuneMetrics(cur.base, cur.hard, 0, split), outS = tuneMetrics(cur.base, cur.hard, split, N + 1);
+  const parts = [], caps = [];
+  // 1. Trade count: 5 trades is nothing, 100 or more is a fair sample.
+  const nTrades = full.n, sTrades = 100 * robClamp(Math.log(Math.max(nTrades, 1) / 5) / Math.log(100 / 5));
+  parts.push({ key: 'trades', label: 'Enough trades', score: sTrades, detail: `${nTrades} trade${nTrades === 1 ? '' : 's'} in the tested history. About 100 or more is a fair sample; under 20 proves very little.` });
+  // 2. Out-of-sample: the most recent 30%, compared with the first 70% per trade.
+  let sOos, dOos;
+  if (outS.n < 5) { sOos = 25; dOos = `Only ${outS.n} trade${outS.n === 1 ? '' : 's'} in the most recent 30%, too few to judge.`; }
+  else if (outS.ret <= 0) { sOos = Math.round(15 * robClamp(1 + outS.ret / 10)); dOos = `The most recent 30% lost ${fmtPct(outS.ret).replace('+', '')} after costs (${outS.n} trades).`; }
+  else {
+    const pIn = inS.n ? inS.ret / inS.n : 0, pOut = outS.ret / outS.n, ratio = pIn > 0 ? pOut / pIn : 1;
+    sOos = Math.round(40 + 60 * robClamp(ratio)); dOos = `The most recent 30% made ${fmtPct(outS.ret)} over ${outS.n} trades, ${pIn > 0 ? Math.round(100 * robClamp(ratio, 0, 9)) + '% of the per-trade result of the first 70%' : 'while the first 70% did not make money'}.`;
+  }
+  parts.push({ key: 'oos', label: 'Holds on recent data', score: sOos, detail: dOos });
+  // 3. Parameter stability: a grid over two settings around the current ones.
+  let grid = null, sStab = null, dStab = 'No numeric settings to vary (custom equations or signals without a number), so stability could not be checked.';
+  const all = tuneDims(spec), condDims = all.filter(d => d.id[0] === 'c'), ordered = condDims.concat(all.filter(d => d.id === 'tp' || d.id === 'sl'));
+  const axes = ordered.slice(0, 2);
+  if (axes.length >= 1) {
+    const A = axes[0], B = axes[1] || null, rowsB = B ? B.cands : [null];
+    const idx = (d) => { const k = d.cands.findIndex(c => String(c) === String(d.cur)); if (k >= 0) return k; const x = parseFloat(d.cur); return d.cands.reduce((bi, c, i, a) => Math.abs(parseFloat(c) - x) < Math.abs(parseFloat(a[bi]) - x) ? i : bi, 0); };
+    const ci = idx(A), cj = B ? idx(B) : 0, v = A.cands.map(() => rowsB.map(() => null));
+    for (let i = 0; i < A.cands.length; i++) {
+      for (let j = 0; j < rowsB.length; j++) {
+        if (tk && tk.cancel) return null;
+        const sp = clone(); A.set(sp, A.cands[i]); if (B) B.set(sp, B.cands[j]);
+        const e = evalSpec(sp, 1), m = tuneMetrics(e.base, e.base, 0, N + 1);
+        v[i][j] = m.n >= 5 ? m.ret : null;
+      }
+      await screenTick();
+    }
+    grid = { a: { label: A.label, cands: A.cands, unit: A.unit }, b: B ? { label: B.label, cands: B.cands, unit: B.unit } : null, v, ci, cj };
+    const cells = [], nb = [];
+    for (let i = 0; i < v.length; i++) for (let j = 0; j < v[i].length; j++) { if (v[i][j] === null) continue; cells.push(v[i][j]); if (Math.abs(i - ci) <= 1 && Math.abs(j - cj) <= 1) nb.push(v[i][j]); }
+    if (cells.length >= 3) {
+      const fAll = cells.filter(x => x > 0).length / cells.length, fNb = nb.length ? nb.filter(x => x > 0).length / nb.length : 0;
+      sStab = Math.round(100 * (0.5 * fAll + 0.5 * fNb) * (v[ci][cj] !== null && v[ci][cj] > 0 ? 1 : 0.5));
+      dStab = `${Math.round(100 * fAll)}% of ${cells.length} nearby settings were profitable, ${Math.round(100 * fNb)}% of the closest ones.`;
+    } else { grid = null; sStab = null; dStab = 'Too few of the nearby settings produced enough trades to judge stability.'; }
+  }
+  parts.push({ key: 'stab', label: 'Stable settings', score: sStab, detail: dStab });
+  // 4. Cost sensitivity: return at normal costs vs doubled costs, and the cost multiple at which the return reaches zero.
+  let sCost, dCost, breakEven = null;
+  if (full.ret <= 0) { sCost = 0; dCost = 'Not profitable even at the assumed costs.'; }
+  else {
+    const drop = full.ret - full.ret2;
+    breakEven = drop > 0 ? 1 + full.ret / drop : 9;
+    sCost = Math.round(100 * robClamp((breakEven - 1) / 1.5));
+    dCost = breakEven >= 9 ? 'Barely affected by higher costs.' : `Return reaches zero at about ${breakEven.toFixed(1)}x the assumed costs (${fmtPct(full.ret)} now, ${fmtPct(full.ret2)} with costs doubled).`;
+  }
+  parts.push({ key: 'cost', label: 'Survives higher costs', score: sCost, detail: dCost });
+  // Combine. Parts that could not be measured are left out and the weights renormalised.
+  const have = parts.filter(p => p.score !== null && p.score !== undefined);
+  const wsum = have.reduce((a, p) => a + ROB_W[p.key], 0);
+  let score = have.reduce((a, p) => a + p.score * ROB_W[p.key], 0) / (wsum || 1);
+  if (nTrades < 20) { score = Math.min(score, 40); caps.push('Capped at 40: under 20 trades is too few for any score to be trusted.'); }
+  if (outS.n >= 5 && outS.ret <= 0) { score = Math.min(score, 45); caps.push('Capped at 45: the most recent 30% of history lost money.'); }
+  if (full.ret <= 0) { score = Math.min(score, 20); caps.push('Capped at 20: the strategy is not profitable after costs on this history.'); }
+  score = Math.round(score);
+  return { score, band: score >= 70 ? 'Solid' : score >= 45 ? 'Mixed' : 'Weak', parts, grid, caps, n: nTrades, ret: full.ret, ret2: full.ret2, breakEven, bars: N, at: Date.now(), rt: rtPct };
+}
+function robSpecFor(ref) { return ref === 'draft' ? State.draft : (State.user.strategies || []).find(x => x.id === ref); }
+function robHash(spec, rt) { const hb = State.realBars && State.realBars[realBarsKey(spec.symbol, spec.timeframe)]; return JSON.stringify([hb && hb.bars ? hb.bars.length : 0, spec.symbol, spec.timeframe, spec.direction, spec.takeProfit, spec.stopLoss, spec.trailingStopPct, spec.leverage, (spec.entryConditions || []).map(c => [c.indicator, c.operator, c.value, c.logic, c.language]), (spec.filterConditions || []).map(c => [c.indicator, c.operator, c.value]), rt]); }
+async function robustRun(ref) {
+  const spec = robSpecFor(ref); if (!spec) return;
+  State.robust = State.robust || {};
+  const rt = costRoundTrip(spec.symbol), h = robHash(spec, rt);
+  const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
+  State.robust[ref] = { hash: h, running: true };
+  if (!hit || !hit.bars || hit.bars.length < 150 || spec.direction === 'both') { State.robust[ref] = { hash: h, none: spec.direction === 'both' ? 'A "both" strategy picks long or short at random in backtests, so it cannot be scored. Make a long and a short version.' : 'Needs real price history for this symbol and timeframe.' }; render(); return; }
+  let res = null; try { res = await robustnessCompute(JSON.parse(JSON.stringify(spec, (k, v) => (k === 'backtest' || k === 'tradeLog' || k === '_exprCache') ? undefined : v)), hit.bars, rt, null); } catch (e) { console.error(e); }
+  State.robust[ref] = res ? { hash: h, res } : { hash: h, none: 'The robustness check could not run for this strategy.' };
+  render();
+}
+function robColor(sc) { return sc >= 70 ? 'var(--long)' : sc >= 45 ? 'var(--warn, #F5C451)' : 'var(--short)'; }
+function robHeatHtml(g) {
+  if (!g) return '';
+  const flat = g.v.reduce((a, r) => a.concat(r), []).filter(x => x !== null), mx = Math.max(1, ...flat.map(Math.abs));
+  const cell = (val, i, j) => {
+    const cur = i === g.ci && j === g.cj;
+    const bg = val === null ? 'rgba(148,163,184,.12)' : val > 0 ? `rgba(52,211,153,${0.15 + 0.6 * Math.min(1, val / mx)})` : `rgba(251,113,133,${0.15 + 0.6 * Math.min(1, -val / mx)})`;
+    return `<td title="${val === null ? 'Too few trades' : fmtPct(val) + ' with normal costs'}" style="padding:0;"><div style="min-width:54px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:6px;margin:2px;background:${bg};${cur ? 'outline:2px solid #fff;' : ''}font-size:11px;" class="mono">${val === null ? '·' : fmtPct(val).replace('+', '')}</div></td>`;
+  };
+  const b = g.b;
+  return `<div style="margin-top:12px;"><div class="faint" style="font-size:11.5px;margin-bottom:6px;">How the result changes as ${esc(g.a.label.toLowerCase())}${b ? ' and ' + esc(b.label.toLowerCase()) : ''} move. A broad green area is good; one isolated green cell is usually luck. White outline: your settings.</div>
+    <div style="overflow-x:auto;"><table style="border-collapse:collapse;"><thead><tr><th class="faint" style="font-size:10.5px;text-align:right;padding-right:8px;">${b ? esc(b.label) + ' ↓ / ' : ''}${esc(g.a.label)} →</th>${g.a.cands.map(c => `<th class="mono faint" style="font-size:11px;padding:0 4px;">${esc(String(c))}</th>`).join('')}</tr></thead>
+    <tbody>${(b ? b.cands : [null]).map((bc, j) => `<tr><th class="mono faint" style="font-size:11px;text-align:right;padding-right:8px;">${bc === null ? '' : esc(String(bc))}</th>${g.a.cands.map((ac, i) => cell(g.v[i][j], i, j)).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+}
+function renderRobustCard(ref, bt) {
+  if (!bt || bt.noData || !bt.trades && bt.trades !== 0) return '';
+  const spec = robSpecFor(ref); if (!spec || !spec.entryConditions || !spec.entryConditions.length) return '';
+  const st = State.robust && State.robust[ref], rt = costRoundTrip(spec.symbol), h = robHash(spec, rt);
+  const head = `<div class="panel-head" style="margin-top:14px;"><h3>${icon('shield')} Robustness score</h3><span class="badge badge-dim">Guide, not a forecast</span></div>`;
+  if (!st || st.hash !== h) {
+    if (!st || !st.running) setTimeout(() => { const s2 = State.robust && State.robust[ref]; if (!s2 || s2.hash !== h) robustRun(ref); }, 60);
+    return `<div class="v3-bt-extra">${head}<p class="muted" style="font-size:13px;margin:0;">Checking how fragile this result is…</p></div>`;
+  }
+  if (st.running) return `<div class="v3-bt-extra">${head}<p class="muted" style="font-size:13px;margin:0;">Checking how fragile this result is…</p></div>`;
+  if (st.none) return `<div class="v3-bt-extra">${head}<p class="muted" style="font-size:13px;margin:0;">${esc(st.none)}</p></div>`;
+  const r = st.res;
+  return `<div class="v3-bt-extra" style="border:1px solid var(--border-soft);border-radius:10px;padding:14px;">${head}
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+      <div style="font-size:44px;font-weight:700;line-height:1;color:${robColor(r.score)};" class="mono">${r.score}<span style="font-size:16px;font-weight:400;" class="faint"> / 100</span></div>
+      <div><span class="badge ${r.score >= 70 ? 'badge-long' : r.score >= 45 ? 'badge-info' : 'badge-short'}">${r.band}</span><div class="muted" style="font-size:12.5px;line-height:1.5;margin-top:4px;max-width:520px;">${r.score >= 70 ? 'Held up on every check we ran. That lowers the risk of a lucky backtest. It does not mean it will make money.' : r.score >= 45 ? 'Some checks passed and some did not. Look at the weakest line below before trusting it.' : 'This result is fragile. It may be mostly luck or too thin to rely on.'}</div></div>
+    </div>
+    ${r.parts.map(p => `<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>${esc(p.label)}</span><b class="mono" style="color:${p.score === null ? 'inherit' : robColor(p.score)}">${p.score === null ? 'N/A' : p.score}</b></div><div style="height:6px;border-radius:4px;background:rgba(148,163,184,.2);margin:3px 0;"><div style="height:100%;width:${p.score === null ? 0 : p.score}%;border-radius:4px;background:${p.score === null ? 'transparent' : robColor(p.score)};"></div></div><div class="faint" style="font-size:11.5px;line-height:1.45;">${esc(p.detail)}</div></div>`).join('')}
+    ${r.caps.map(c => `<div class="v3-warn warn" style="margin-top:6px;">${icon('alertTriangle')}<span>${esc(c)}</span></div>`).join('')}
+    ${robHeatHtml(r.grid)}
+    <div class="faint" style="font-size:11px;line-height:1.5;margin-top:10px;">Weights: trades 20%, recent-data result 30%, stable settings 25%, higher costs 25%. Costs used: ${(r.rt).toFixed(2)}% per round trip. Past results do not predict future ones.</div>
+  </div>`;
+}
+
 /* =============================== TUNE (robust re-tuning) ===============================
    Searches settings around a strategy's current ones (take profit, stop loss and the
    numbers inside its entry conditions) without fooling itself:
@@ -4348,16 +4500,17 @@ function tuneMetrics(base, hard, lo, hi) {
   const pos = [0, 1, 2].filter(k => { const l = lo + (hi - lo) * k / 3, u = lo + (hi - lo) * (k + 1) / 3; return sum(a.filter(t => t.entryBar >= l && t.entryBar < u)) > 0; }).length;
   let eq = 10000, peak = 10000, dd = 0;
   a.forEach(t => { eq += t.pnl; peak = Math.max(peak, eq); dd = Math.max(dd, (peak - eq) / peak); });
-  return { n: a.length, ret, ret2, pos, dd: dd * 100, win: a.length ? 100 * a.filter(t => t.pnl > 0).length / a.length : 0 };
+  let t = 0; if (a.length >= 3) { const m = sum(a) / a.length, sd = Math.sqrt(a.reduce((x, y) => x + (y.pnl - m) * (y.pnl - m), 0) / (a.length - 1)); t = sd > 0 ? m / sd * Math.sqrt(a.length) : 0; }
+  return { n: a.length, ret, ret2, pos, dd: dd * 100, win: a.length ? 100 * a.filter(t => t.pnl > 0).length / a.length : 0, t };
 }
 function tuneProgress(txt, frac) {
   const t = document.getElementById('tune-prog-t'), b = document.getElementById('tune-prog-b');
   if (t) t.textContent = txt; if (b) b.style.width = Math.max(2, Math.round(frac * 100)) + '%';
 }
-async function tuneRun(spec, bars, rtPct, dimIds, tk) {
+async function tuneRun(spec, bars, rtPct, dimIds, tk, splitFrac) {
   const all = tuneDims(spec), dims = all.filter(d => dimIds.includes(d.id));
   if (!dims.length) return null;
-  const N = bars.length, split = Math.floor(N * TUNE_SPLIT), seed = spec.symbol + '|' + spec.timeframe + '|tune';
+  const N = bars.length, split = Math.floor(N * (splitFrac || TUNE_SPLIT)), seed = spec.symbol + '|' + spec.timeframe + '|tune';
   const strip = (k, v) => (k === 'backtest' || k === 'tradeLog' || k === '_exprCache') ? undefined : v;
   const memo = {};
   const evalSpec = (sp) => {
@@ -4477,7 +4630,13 @@ function tuneBodyHtml(key) {
     <div class="asset-pills" style="margin-bottom:10px;">${pills}</div>
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><span class="faint" style="font-size:12px;">${combos} settings to test${combos > 400 ? ', this will take a little while' : ''}</span>${runBtn}</div>
     ${tk.running ? `<div style="margin:12px 0 4px;"><div id="tune-prog-t" class="muted" style="font-size:13px;margin-bottom:6px;">Loading price history…</div><div style="height:8px;border-radius:5px;background:rgba(148,163,184,.2);"><div id="tune-prog-b" style="height:100%;width:2%;border-radius:5px;background:var(--brand,#ff4fa3);transition:width .2s;"></div></div></div>` : ''}
-    ${!tk.running && tk.result ? tuneResultHtml(key, tk.result) : ''}`;
+    ${!tk.running && tk.result ? tuneResultHtml(key, tk.result) : ''}
+    ${!tk.running && tk.result ? tuneWfBlock(key) : ''}`;
+}
+function tuneWfBlock(key) {
+  const tk = tuneState(key);
+  if (tk.wfRunning) return `<div style="margin:14px 0 4px;"><div id="tune-prog-t" class="muted" style="font-size:13px;margin-bottom:6px;">Walk-forward…</div><div style="height:8px;border-radius:5px;background:rgba(148,163,184,.2);"><div id="tune-prog-b" style="height:100%;width:2%;border-radius:5px;background:var(--brand,#ff4fa3);transition:width .2s;"></div></div><button class="btn btn-outline btn-sm" style="margin-top:8px;" data-action="tune-stop" data-tkey="${esc(key)}">Stop</button></div>`;
+  return `<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" data-action="tune-wf" data-tkey="${esc(key)}">${icon('target')} ${tk.wf ? 'Run walk-forward again' : 'Run walk-forward check'}</button><span class="faint" style="font-size:12px;">Re-tunes four times on earlier history and tests each winner on the block that follows. Worth doing before you apply anything.</span></div>${tk.wf ? wfHtml(tk.wf) : ''}`;
 }
 function renderTunePanel(s) {
   if (!s || !s.entryConditions || !s.entryConditions.length) return '';
@@ -4498,7 +4657,7 @@ async function tuneStart(key) {
   await loadRealBars(spec.symbol, spec.timeframe);
   const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
   if (!hit || !hit.bars || hit.bars.length < 150) { tk.running = false; render(); toast('Real price history is not available for this symbol and timeframe, so it cannot be tuned.', 'err'); return; }
-  const c = backtestCosts(), rt = 2 * (c.feePct + c.slipPct);
+  const rt = costRoundTrip(spec.symbol);
   let res = null; try { res = await tuneRun(spec, hit.bars, rt, tk.dimIds, tk); } catch (e) { console.error(e); }
   const stopped = tk.cancel; tk.running = false; tk.cancel = false;
   if (res) { tk.result = res; tuneRunsBump(key); }
@@ -4525,6 +4684,67 @@ async function tuneApply(key, idx) {
   toast('Tuned settings applied and backtest re-run. Run Monte Carlo and demo trade before trusting them.', 'ok'); checkAchievements();
 }
 
+
+/* ---- Walk-forward validation and the multiple-testing check ----
+   Walk-forward: four times in a row, tune on everything before a block of history, then test the winner on that
+   unseen block. The blocks do not overlap and each one is only used to test, never to choose. It answers "does the
+   whole tuning procedure keep working as time moves on", which a single hold-out cannot. */
+const WF_FOLDS = 4, WF_START = 0.5, WF_BLOCK = 0.125;
+async function tuneWalkForward(spec, bars, rtPct, dimIds, tk) {
+  const N = bars.length, folds = [];
+  for (let k = 0; k < WF_FOLDS; k++) {
+    if (tk && tk.cancel) return null;
+    const testStart = WF_START + WF_BLOCK * k, testEnd = testStart + WF_BLOCK;
+    const slice = bars.slice(0, Math.floor(N * testEnd)), frac = Math.floor(N * testStart) / slice.length;
+    tuneProgress(`Walk-forward block ${k + 1} of ${WF_FOLDS}`, k / WF_FOLDS);
+    const r = await tuneRun(spec, slice, rtPct, dimIds, tk, frac);
+    if (!r) return null;
+    const top = r.top[0] || null;
+    folds.push({ k, from: Math.round(testStart * 100), to: Math.round(testEnd * 100), picked: !!top, vals: top ? top.vals : null, test: top ? top.hold : null, base: r.current.hold, dims: r.dims });
+    await screenTick();
+  }
+  const used = folds.filter(f => f.picked && f.test.n > 0);
+  const tuned = used.reduce((a, f) => a + f.test.ret, 0), tuned2 = used.reduce((a, f) => a + f.test.ret2, 0), base = folds.reduce((a, f) => a + f.base.ret, 0);
+  const trades = used.reduce((a, f) => a + f.test.n, 0), positive = used.filter(f => f.test.ret > 0).length;
+  let verdict;
+  if (trades < 20) verdict = 'few';
+  else if (positive >= WF_FOLDS - 1 && tuned > 0 && tuned2 > 0) verdict = 'pass';
+  else if (tuned <= 0 || positive <= 1) verdict = 'fail';
+  else verdict = 'mixed';
+  return { folds, tuned, tuned2, base, trades, positive, verdict, at: Date.now() };
+}
+function wfHtml(w) {
+  const msg = {
+    pass: ['badge-long', 'Walk-forward passed', 'Settings chosen on earlier history made money on most of the unseen blocks that followed, even with costs doubled. That is the strongest evidence this tool can give. It is still not proof.'],
+    mixed: ['badge-info', 'Walk-forward mixed', 'Some unseen blocks made money and some did not. The tuning helps in some conditions only. Be cautious, and demo-trade before real money.'],
+    fail: ['badge-short', 'Walk-forward failed', 'Settings chosen on earlier history did not keep working on the blocks that followed. That is what overfitting looks like. Do not apply them.'],
+    few: ['badge-dim', 'Inconclusive', 'Too few trades across the unseen blocks (under 20) to judge. Use a longer history or a more active strategy.']
+  }[w.verdict];
+  const pc = (x) => `<span style="color:${plColor(x)}">${fmtPct(x)}</span>`;
+  const rows = w.folds.map(f => `<tr style="border-top:1px solid var(--border-soft);text-align:right;"><td style="text-align:left;padding:7px 8px;">Block ${f.k + 1} <span class="faint">(${f.from}% to ${f.to}% of history)</span></td>
+    <td style="padding:7px 8px;" class="mono">${f.picked ? f.test.n : 'N/A'}</td><td style="padding:7px 8px;" class="mono">${f.picked && f.test.n >= 3 ? pc(f.test.ret) : (f.picked ? 'N/A' : 'nothing qualified')}</td><td style="padding:7px 8px;" class="mono">${f.picked && f.test.n >= 3 ? pc(f.test.ret2) : 'N/A'}</td><td style="padding:7px 8px;" class="mono">${f.base.n >= 3 ? pc(f.base.ret) : 'N/A'}</td></tr>`).join('');
+  return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border-soft);border-radius:10px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"><b style="font-size:13px;">Walk-forward validation</b><span class="badge ${msg[0]}">${msg[1]}</span><span class="faint" style="font-size:12px;">${w.positive} of ${WF_FOLDS} unseen blocks profitable · ${w.trades} trades · combined ${fmtPct(w.tuned)} (${fmtPct(w.tuned2)} with costs doubled) vs ${fmtPct(w.base)} for your current settings</span></div>
+    <div class="muted" style="font-size:12.5px;line-height:1.55;">${msg[2]}</div>
+    <div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px;"><thead><tr class="faint" style="font-size:10.5px;text-align:right;"><th style="text-align:left;padding:4px 8px;">UNSEEN BLOCK</th><th style="padding:4px 8px;">TRADES</th><th style="padding:4px 8px;">TUNED RETURN</th><th style="padding:4px 8px;">COSTS x2</th><th style="padding:4px 8px;">CURRENT SETTINGS</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="faint" style="font-size:11px;line-height:1.5;margin-top:6px;">Each block was tested only after tuning on all earlier history. Blocks do not overlap.</div></div>`;
+}
+async function tuneWfStart(key) {
+  const tk = tuneState(key), spec = tuneSpecFor(key);
+  if (!spec || tk.running || tk.wfRunning) return;
+  tk.wfRunning = true; tk.cancel = false; tk.wf = null; render();
+  await loadRealBars(spec.symbol, spec.timeframe);
+  const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
+  if (!hit || !hit.bars || hit.bars.length < 300) { tk.wfRunning = false; render(); toast('Walk-forward needs at least 300 bars of real price history.', 'err'); return; }
+  let w = null; try { w = await tuneWalkForward(spec, hit.bars, costRoundTrip(spec.symbol), tk.dimIds || tuneDims(spec).slice(0, 3).map(d => d.id), tk); } catch (e) { console.error(e); }
+  tk.wfRunning = false; tk.cancel = false; if (w) tk.wf = w; render();
+  if (w) toast('Walk-forward finished.', 'ok');
+}
+// Approximate one-sided critical z for a tail probability p (Abramowitz and Stegun 26.2.23).
+function normTailZ(p) { const t = Math.sqrt(-2 * Math.log(Math.min(0.5, Math.max(1e-12, p)))); return t - (2.515517 + 0.802853 * t + 0.010328 * t * t) / (1 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t); }
+// Bonferroni: each hold-out look must clear 5% divided by the number of strategies looked at. Approximate (normal tail).
+function mtCritical(looks) { return normTailZ(0.05 / Math.max(1, looks)); }
+
 /* ---- Tune many: batch tuning of screener results ---- */
 const TUNE_BATCH_OPTS = [10, 25, 50, 100, 'all'];
 function tuneBatchState() { return State.tuneBatch || (State.tuneBatch = { n: 25, running: false, cancel: false, out: [], done: 0, total: 0 }); }
@@ -4543,7 +4763,6 @@ async function tuneBatchStart() {
   const cand = tuneBatchCandidates(), take = tb.n === 'all' ? cand : cand.slice(0, tb.n);
   if (!take.length) { toast('No passing or marginal strategies to tune. Run the screener first.', 'info'); return; }
   Object.assign(tb, { running: true, cancel: false, out: [], done: 0, total: take.length, started: Date.now(), finished: null }); tuneBatchPaint();
-  const c = backtestCosts(), rt = 2 * (c.feePct + c.slipPct);
   for (let i = 0; i < take.length && !tb.cancel; i++) {
     const row = take[i], key = 'row:' + row.key, spec = tuneSpecFor(key);
     tuneBatchProgress(`Tuning ${i + 1} of ${take.length}: ${row.name} on ${row.symbol}`, i / take.length);
@@ -4554,11 +4773,11 @@ async function tuneBatchStart() {
         const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
         if (hit && hit.bars && hit.bars.length >= 150) {
           const tk = tuneState(key); if (!tk.dimIds) tk.dimIds = tuneDims(spec).slice(0, 3).map(d => d.id);
-          const res = await tuneRun(spec, hit.bars, rt, tk.dimIds, tb);
+          const res = await tuneRun(spec, hit.bars, costRoundTrip(spec.symbol), tk.dimIds, tb);
           if (res) {
             tk.result = res; tuneRunsBump(key);
             const t0 = res.top[0];
-            Object.assign(o, { verdict: res.verdict, dims: res.dims, curHold: res.current.hold, bestHold: t0 ? t0.hold : null, vals: t0 ? t0.vals : null, curVals: res.curVals, strong: res.verdict === 'confirmed' && t0.hold.n >= 10 });
+            Object.assign(o, { tried: res.tried, verdict: res.verdict, dims: res.dims, curHold: res.current.hold, bestHold: t0 ? t0.hold : null, vals: t0 ? t0.vals : null, curVals: res.curVals, strong: res.verdict === 'confirmed' && t0.hold.n >= 10 });
           }
         }
       }
@@ -4570,6 +4789,24 @@ async function tuneBatchStart() {
   tb.running = false; tb.finished = Date.now(); const stopped = tb.cancel; tb.cancel = false;
   tuneBatchPaint();
   toast(stopped ? 'Stopped. Results so far are shown.' : 'Tuning finished. Only the Confirmed rows improved on held-back history.', stopped ? 'info' : 'ok');
+}
+
+async function tuneBatchWf() {
+  const tb = tuneBatchState(); if (tb.running) return;
+  const rows = tb.out.filter(o => o.verdict === 'confirmed'); if (!rows.length) return;
+  tb.running = true; tb.cancel = false; tb.wfDone = false; tuneBatchPaint();
+  for (let i = 0; i < rows.length && !tb.cancel; i++) {
+    const o = rows[i], key = 'row:' + o.key, spec = tuneSpecFor(key); if (!spec) continue;
+    tuneBatchProgress(`Walk-forward ${i + 1} of ${rows.length}: ${o.name} on ${o.symbol}`, i / rows.length);
+    try {
+      await loadRealBars(spec.symbol, spec.timeframe);
+      const hit = State.realBars[realBarsKey(spec.symbol, spec.timeframe)];
+      if (hit && hit.bars && hit.bars.length >= 300) { const w = await tuneWalkForward(spec, hit.bars, costRoundTrip(spec.symbol), tuneState(key).dimIds || tuneDims(spec).slice(0, 3).map(d => d.id), tb); if (w) { o.wf = w; tuneState(key).wf = w; } }
+    } catch (e) { console.error(e); }
+    await screenTick();
+  }
+  tb.running = false; tb.cancel = false; tb.wfDone = true; tuneBatchPaint();
+  toast('Walk-forward finished. Only rows that pass it and the multiple-testing check are marked as standing up.', 'ok');
 }
 function tuneBatchInner() {
   const tb = tuneBatchState(), cand = tuneBatchCandidates();
@@ -4583,6 +4820,10 @@ function tuneBatchInner() {
     const badge = { confirmed: ['badge-long', 'Confirmed'], notbetter: ['badge-dim', 'Not better'], failed: ['badge-short', 'Failed hold-out'], few: ['badge-dim', 'Too few trades'], none: ['badge-dim', 'Nothing qualified'], nodata: ['badge-dim', 'No data'] };
     const order = { confirmed: 0, notbetter: 1, few: 2, failed: 3, none: 4, nodata: 5 };
     const rows = tb.out.slice().sort((a, b) => (order[a.verdict] - order[b.verdict]) || ((b.bestHold ? b.bestHold.ret : -9999) - (a.bestHold ? a.bestHold.ret : -9999)));
+    const looks = tb.out.filter(o => o.bestHold).length, crit = mtCritical(looks), variants = tb.out.reduce((a, o) => a + (o.tried || 0), 0);
+    const mtOk = (o) => !!(o.bestHold && o.bestHold.n >= 10 && o.bestHold.t >= crit);
+    const wfBadge = { pass: 'badge-long', mixed: 'badge-info', fail: 'badge-short', few: 'badge-dim' }, wfLabel = { pass: 'Passed', mixed: 'Mixed', fail: 'Failed', few: 'Inconclusive' };
+    const confirmedRows = tb.out.filter(o => o.verdict === 'confirmed'), standing = confirmedRows.filter(o => mtOk(o) && o.wf && o.wf.verdict === 'pass').length;
     const body = rows.map(o => {
       const b = badge[o.verdict] || badge.nodata, can = o.verdict === 'confirmed' || o.verdict === 'notbetter' || o.verdict === 'failed' || o.verdict === 'few';
       const settings = o.vals && o.dims ? tuneSettingsText(o.dims, o.vals) : '<span class="faint">none</span>';
@@ -4592,14 +4833,19 @@ function tuneBatchInner() {
         <td class="mono" style="padding:9px 8px;color:${o.bestHold ? plColor(o.bestHold.ret) : 'inherit'}">${o.bestHold ? fmtPct(o.bestHold.ret) : 'N/A'}<div class="faint" style="font-size:10.5px;">${o.bestHold ? o.bestHold.n + ' trades' : ''}</div></td>
         <td style="padding:9px 8px;text-align:left;font-size:12px;line-height:1.5;">${settings}</td>
         <td style="padding:9px 8px;text-align:left;"><span class="badge ${b[0]}">${b[1]}</span>${o.strong ? ' <span class="badge badge-info">10+ trades</span>' : ''}</td>
-        <td style="padding:9px 0 9px 8px;white-space:nowrap;text-align:right;">${can ? `<button class="btn btn-ghost btn-sm" data-action="tune-open" data-key="${esc(o.key)}">Details</button>` : ''}${o.verdict === 'confirmed' ? ` <button class="btn btn-primary btn-sm" data-action="tune-apply" data-tkey="row:${esc(o.key)}" data-idx="0">Apply</button>` : ''}</td></tr>`;
+        <td style="padding:9px 8px;text-align:left;font-size:12px;">${o.verdict === 'confirmed' && o.bestHold ? (mtOk(o) ? '<span class="badge badge-long">Stands</span>' : '<span class="badge badge-short">Could be luck</span>') + `<div class="faint" style="font-size:10.5px;">t = ${o.bestHold.t.toFixed(1)}, needs ${crit.toFixed(1)}</div>` : '<span class="faint">N/A</span>'}</td>
+        <td style="padding:9px 8px;text-align:left;font-size:12px;">${o.verdict === 'confirmed' ? (o.wf ? `<span class="badge ${wfBadge[o.wf.verdict]}">${wfLabel[o.wf.verdict]}</span><div class="faint" style="font-size:10.5px;">${o.wf.positive} of ${WF_FOLDS} blocks +</div>` : '<span class="faint">Not run</span>') : '<span class="faint">N/A</span>'}</td>
+        <td style="padding:9px 0 9px 8px;white-space:nowrap;text-align:right;">${can ? `<button class="btn btn-ghost btn-sm" data-action="tune-open" data-key="${esc(o.key)}">Details</button>` : ''}${o.verdict === 'confirmed' ? ` <button class="btn ${mtOk(o) && o.wf && o.wf.verdict === 'pass' ? 'btn-primary' : 'btn-outline'} btn-sm" data-action="tune-apply" data-tkey="row:${esc(o.key)}" data-idx="0">Apply</button>` : ''}</td></tr>`;
     }).join('');
     res = `<div style="font-size:13px;margin:12px 0 4px;"><b>${cnt('confirmed')}</b> of ${tb.out.length} improved on held-back history (<b>${strong}</b> with 10 or more trades there) · ${cnt('failed')} failed the hold-out · ${cnt('none') + cnt('few')} had nothing solid to apply${tb.finished ? ` · <span class="faint">${new Date(tb.finished).toLocaleTimeString()}</span>` : ''}</div>
-      <div class="faint" style="font-size:11.5px;line-height:1.55;margin-bottom:8px;">The more strategies you tune, the more likely a few look better by luck, even on held-back history. Prefer rows with 10 or more hold-out trades, then run Monte Carlo and demo trade before trusting any of them. Tuned settings are only applied when you press Apply.</div>
-      <div style="overflow:auto;max-height:460px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:860px;"><thead><tr class="faint" style="font-size:10.5px;position:sticky;top:0;background:var(--panel);z-index:1;"><th style="text-align:left;padding:6px 8px 8px;">STRATEGY</th><th style="text-align:right;padding:6px 8px 8px;">HOLD-OUT NOW</th><th style="text-align:right;padding:6px 8px 8px;">HOLD-OUT TUNED</th><th style="text-align:left;padding:6px 8px 8px;">BEST SETTINGS</th><th style="text-align:left;padding:6px 8px 8px;">RESULT</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+      <div class="v3-warn warn" style="margin:8px 0;">${icon('alertTriangle')}<span><b>${variants.toLocaleString()} setting variants were tested across ${tb.out.length} strateg${tb.out.length === 1 ? 'y' : 'ies'}.</b> Test enough variants and some will look good by luck alone. That is the most common way to build a result that does not hold up. A "Confirmed" row had to beat its hold-out once, but with ${looks} strategies looked at, a few were always going to. The <b>After multiple testing</b> column raises the bar to what ${looks} looks demand (the hold-out result must be at least ${crit.toFixed(1)} standard errors above zero). The <b>Walk-forward</b> column re-tunes four times on earlier history and tests each winner on unseen blocks.</span></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 8px;">${confirmedRows.length && !tb.running ? `<button class="btn btn-outline btn-sm" data-action="tb-wf">${icon('target')} ${tb.wfDone ? 'Run walk-forward again' : 'Run walk-forward on the ' + confirmedRows.length + ' confirmed row' + (confirmedRows.length === 1 ? '' : 's')}</button>` : ''}<span class="faint" style="font-size:12px;">${tb.wfDone ? `<b>${standing}</b> of ${confirmedRows.length} confirmed rows stand after both checks.` : confirmedRows.length ? 'Run it before you apply anything. A blue Apply button means the row passed both checks.' : ''}</span></div>
+      <div class="faint" style="font-size:11.5px;line-height:1.55;margin-bottom:8px;">Prefer rows with 10 or more hold-out trades, then run Monte Carlo and demo trade before trusting any of them. Tuned settings are only applied when you press Apply.</div>
+      <div style="overflow:auto;max-height:460px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:860px;"><thead><tr class="faint" style="font-size:10.5px;position:sticky;top:0;background:var(--panel);z-index:1;"><th style="text-align:left;padding:6px 8px 8px;">STRATEGY</th><th style="text-align:right;padding:6px 8px 8px;">HOLD-OUT NOW</th><th style="text-align:right;padding:6px 8px 8px;">HOLD-OUT TUNED</th><th style="text-align:left;padding:6px 8px 8px;">BEST SETTINGS</th><th style="text-align:left;padding:6px 8px 8px;">RESULT</th><th style="text-align:left;padding:6px 8px 8px;">AFTER MULTIPLE TESTING</th><th style="text-align:left;padding:6px 8px 8px;">WALK-FORWARD</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
   }
   return `<div class="panel-head"><h3>${icon('target')} Tune many <span class="badge badge-info" style="margin-left:6px;">Hold-out tested</span></h3></div>
     <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 10px;">Runs Tune on the best passing and marginal results in one go: take profit, stop loss and the first condition value, checked on the last 30% of history that was never used to choose. Nothing is changed until you press Apply on a row.</p>
+    <div class="v3-warn warn" style="margin:0 0 10px;">${icon('alertTriangle')}<span><b>Tuning many variants overfits.</b> The more settings you try, the better the best one will look by chance, and it often will not hold up on new data. We reduce the risk with a hold-out period, doubled costs and walk-forward validation, and we raise the bar for the number of strategies you tune. We cannot remove it. Prefer settings on a broad plateau, and demo-trade before real money.</span></div>
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><select class="input" data-field="tb-n" style="max-width:300px;" ${tb.running ? 'disabled' : ''}>${opts}</select><span class="faint" style="font-size:12px;">${cand.length ? nTake + ' strateg' + (nTake === 1 ? 'y' : 'ies') + ' to tune' : 'Nothing passing or marginal yet'}</span>${runBtn}</div>${prog}${res}`;
 }
 function renderTuneBatchPanel() { return `<div id="tb-panel" class="panel panel-pad" style="margin:0 0 14px;background:var(--panel-2,rgba(255,255,255,.03));">${tuneBatchInner()}</div>`; }
@@ -5834,6 +6080,9 @@ function simulateStrategyTrades(strat, bars, cache, rnd, costPct) {
   const MIN_EQUITY = 1; // an account effectively wiped out stops trading, rather than
                          // continuing to "open positions" worth $0, this also avoids
                          // a 0/0 division producing NaN in pnlPct further down.
+  // Optional "Only trade if..." filters: an extra AND-only chain that must hold on the entry bar.
+  const gateF = (strat.filterConditions || []).filter(c => c && c.indicator && c.indicator !== 'custom_equation').map(c => Object.assign({}, c, { logic: 'AND' }));
+  const gateCache = gateF.length ? buildIndicatorCache(bars, gateF) : null;
 
   for (let i = 1; i < bars.length; i++) {
     if (equity < MIN_EQUITY) break;
@@ -5888,7 +6137,8 @@ function simulateStrategyTrades(strat, bars, cache, rnd, costPct) {
       continue; // no new entry on the same bar a position is being managed
     }
 
-    const signal = evaluateConditionsAt(strat.entryConditions, i, bars, cache);
+    let signal = evaluateConditionsAt(strat.entryConditions, i, bars, cache);
+    if (signal && gateCache) signal = evaluateConditionsAt(gateF, i, bars, gateCache) === true;
     if (!signal) continue;
     let side = strat.direction;
     if (side === 'both') side = 'long'; // conditions don't imply a direction; "both" is simulated as long only, deterministically
@@ -5969,7 +6219,7 @@ function runBacktest(strat) {
   // and simulated bars must clear them or the old series would leak through.
   (strat.entryConditions || []).forEach(c => { delete c._exprCache; });
   const indicatorCache = buildIndicatorCache(bars, strat.entryConditions);
-  const costs = backtestCosts();
+  const costs = backtestCosts(strat.symbol);
   const costPct = 2 * (costs.feePct + costs.slipPct) / 100;
   const { trades: rawTrades, curveEquity } = simulateStrategyTrades(strat, bars, indicatorCache, rnd, costPct);
   // The same run with no costs, so the report can say how much fees and slippage took off.
@@ -6076,15 +6326,33 @@ function runBacktest(strat) {
     chartBars, chartTrades,
     dataSource: useReal ? realHit.source : 'simulated', dataFrom: useReal ? bars[0].t : null, dataTo: useReal ? bars[bars.length - 1].t : null, barCount: bars.length,
     dataNote: (!useReal && State.useRealData && realHit && realHit.unavailable) ? realHit.error : null,
-    costs: { feePct: costs.feePct, slipPct: costs.slipPct, roundTripPct: Math.round(costPct * 10000) / 100 }, grossReturn: Math.round(grossReturn * 10) / 10,
+    costs: { feePct: costs.feePct, slipPct: costs.slipPct, source: costs.source, label: costs.label, roundTripPct: Math.round(costPct * 10000) / 100 }, grossReturn: Math.round(grossReturn * 10) / 10,
     oos: { inSample: inS, outSample: outS, splitPct: 70 }, warnings,
   };
 }
-function backtestCosts() {
-  const c = State.user && State.user.btCosts;
-  const f = (v, d) => (typeof v === 'number' && isFinite(v) && v >= 0 && v <= 5) ? v : d;
-  return { feePct: f(c && c.feePct, 0.03), slipPct: f(c && c.slipPct, 0.02) };
+// Typical retail trading costs per side, in percent of price: [fee or commission/spread share, slippage]. These are
+// estimates to keep backtests honest, not quotes from any broker. Anything the user types in "How honest is this backtest" overrides them.
+const COST_DEFAULTS = {
+  us: [0.03, 0.02, 'US stocks and ETFs'], gcc: [0.12, 0.05, 'Gulf stocks'], nigeria: [0.30, 0.10, 'Nigerian stocks'], intl: [0.08, 0.04, 'international stocks'],
+  crypto: [0.10, 0.05, 'crypto'], forex: [0.01, 0.01, 'forex'], commodities: [0.03, 0.03, 'commodities'], futures: [0.02, 0.02, 'futures'], bonds: [0.03, 0.02, 'bonds'], indices: [0.02, 0.02, 'indices'],
+};
+function costClassFor(symbol) {
+  const g = groupForSymbol(symbol);
+  if (g.id === 'custom' || g.id === 'us_stocks') return 'us';
+  if (g.region === 'gcc') return 'gcc';
+  if (g.id === 'nigeria_stocks') return 'nigeria';
+  if (g.kind === 'equity') return 'intl';
+  return COST_DEFAULTS[g.id] ? g.id : 'us';
 }
+function backtestCosts(symbol) {
+  const c = State.user && State.user.btCosts;
+  const f = (v) => (typeof v === 'number' && isFinite(v) && v >= 0 && v <= 5);
+  if (c && f(c.feePct) && f(c.slipPct)) return { feePct: c.feePct, slipPct: c.slipPct, source: 'yours', label: 'your own settings' };
+  const d = COST_DEFAULTS[costClassFor(symbol)] || COST_DEFAULTS.us;
+  return { feePct: d[0], slipPct: d[1], source: 'default', label: d[2] };
+}
+// Round-trip cost in percent for a symbol (entry + exit, fee + slippage on each).
+function costRoundTrip(symbol) { const c = backtestCosts(symbol); return 2 * (c.feePct + c.slipPct); }
 
 const SYMBOL_DECIMALS = {
   '7203.T': 0, '6758.T': 0, '9984.T': 0, '8306.T': 0, '6861.T': 0, '9432.T': 0, '6098.T': 0, '8035.T': 0, '6501.T': 0, '7267.T': 0, '9433.T': 0, '4063.T': 0, '8058.T': 0, '6752.T': 0, '7974.T': 0, '005930.KS': 0, '000660.KS': 0, '005380.KS': 0, '035420.KS': 0, '051910.KS': 0, '006400.KS': 0, '035720.KS': 0, '105560.KS': 0, '012330.KS': 0, '068270.KS': 0, '207940.KS': 0, '003670.KS': 0,
@@ -7085,6 +7353,89 @@ function renderDashboardWidgets(ctx) {
     return w ? w.render(ctx) : '';
   }).join('');
 }
+/* ---------------- first run: describe, backtest, practice (about five minutes) ---------------- */
+function frExamples() { return [
+  [T3('Apple oversold bounce', 'ارتداد أبل'), 'Buy Apple when RSI is below 30 on the daily chart, 5% take profit and 2% stop loss'],
+  [T3('Bitcoin breakout', 'اختراق بيتكوين'), 'Buy Bitcoin on a breakout above the 20 bar high on the 4 hour chart with a 3% stop loss'],
+  [T3('EUR/USD trend', 'اتجاه اليورو'), 'Buy EUR/USD when the 12 EMA crosses above the 26 EMA on the 4 hour chart'],
+  [T3('Short when overbought', 'بيع عند التشبع'), 'Short Tesla when RSI is above 75 on the 1 hour chart with a 2% stop loss'],
+]; }
+function strategyNameFromText(text) {
+  let t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length > 48) { const cut = t.slice(0, 48); const sp = cut.lastIndexOf(' '); t = (sp > 24 ? cut.slice(0, sp) : cut).replace(/[\s,.;:\-]+$/, '') + '…'; }
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Generated strategy';
+}
+function renderDescribeHero() {
+  return `<section class="panel fr-hero" aria-label="${T3('Describe a strategy', 'صف استراتيجية')}">
+    <div class="fr-kicker">${T3('About 5 minutes · no real money', 'حوالي 5 دقائق · بدون مال حقيقي')}</div>
+    <h3>${T3('Describe a strategy in plain English', 'صف استراتيجية بلغة بسيطة')}</h3>
+    <p class="muted" style="margin:0 0 12px;font-size:14px;line-height:1.6;">${T3('Say what you would buy or sell and when. We turn it into rules, test them on real price history with typical fees and slippage, then you can practise it with pretend money.', 'قل ما تريد شراءه أو بيعه ومتى. نحوله إلى قواعد ونختبره على تاريخ أسعار حقيقي بالرسوم والانزلاق المعتادين، ثم تجربه بمال تجريبي.')}</p>
+    <form data-form="ai-generate" data-first="1">
+      <div class="field"><textarea class="input" name="description" rows="3" required placeholder="${T3('e.g. Buy Apple when RSI is below 30 on the daily chart, 5% take profit and 2% stop loss', 'مثال: اشترِ أبل عندما يكون RSI تحت 30 على الرسم اليومي مع جني أرباح 5% ووقف خسارة 2%')}"></textarea></div>
+      <div class="fr-chips">${frExamples().map((x, i) => `<button type="button" class="fr-chip" data-action="fr-example" data-i="${i}">${esc(x[0])}</button>`).join('')}</div>
+      <div class="form-error" data-ai-err style="display:none;"></div>
+      <div class="fr-actions">
+        <button type="submit" class="btn btn-primary" data-ai-submit>✨ ${T3('Draft my strategy', 'صغ استراتيجيتي')}</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="nav" data-view="templates">${T3('Or start from a ready-made one', 'أو ابدأ من استراتيجية جاهزة')}</button>
+      </div>
+    </form>
+    <ol class="fr-steps">
+      <li><b>1</b><span>${T3('Describe it', 'صفها')}</span></li>
+      <li><b>2</b><span>${T3('Backtest on real data', 'اختبرها على بيانات حقيقية')}</span></li>
+      <li><b>3</b><span>${T3('Practise with pretend money', 'جرّبها بمال تجريبي')}</span></li>
+    </ol>
+    <div class="hint" style="margin-top:12px;">${T3('Past results never guarantee future ones. Nothing here risks real money until you choose to go live.', 'النتائج السابقة لا تضمن المستقبل. لا شيء هنا يخاطر بمال حقيقي حتى تختار الانتقال للحقيقي.')}</div>
+  </section>`;
+}
+function frBuilderBanner() {
+  const fr = State.firstRun;
+  if (!fr || fr.step !== 'review' || State.editingId) return '';
+  return `<div class="panel panel-pad fr-banner">
+    <div class="fr-kicker">${T3('Step 2 of 3 · Review and test', 'الخطوة 2 من 3 · راجع واختبر')}</div>
+    <p>${T3('Check the rules below. When they look right, save and test them on real price history. It takes about a minute and risks nothing.', 'راجع القواعد أدناه. عندما تبدو صحيحة احفظها واختبرها على تاريخ أسعار حقيقي. يستغرق نحو دقيقة ولا يخاطر بشيء.')}</p>
+    <div class="fr-actions">
+      <button type="button" class="btn btn-primary" data-action="quick-bt">${T3('Save and backtest on real data', 'احفظ واختبر على بيانات حقيقية')}</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="fr-dismiss">${T3('Skip the guide', 'تخطَّ الدليل')}</button>
+    </div>
+  </div>`;
+}
+function frDetailBanner(s) {
+  const fr = State.firstRun;
+  if (!fr || fr.step !== 'practice' || fr.id !== s.id) return '';
+  const bt = s.backtest;
+  const head = `<div class="fr-kicker">${T3('Step 3 of 3 · Practise', 'الخطوة 3 من 3 · التجربة')}</div>`;
+  const dismiss = `<button type="button" class="btn btn-ghost btn-sm" data-action="fr-dismiss">${T3('Dismiss', 'إغلاق')}</button>`;
+  if (fr.loading) return `<div class="panel panel-pad fr-banner">${head}<p>${T3('Loading real market data and running the backtest…', 'جارٍ تحميل بيانات السوق الحقيقية وتشغيل الاختبار…')}</p></div>`;
+  if (s.status === 'demo' || s.status === 'live') {
+    return `<div class="panel panel-pad fr-banner">${head}<p><b>${T3('Practice is running.', 'التجربة تعمل.')}</b> ${T3('It watches live prices and records pretend trades on Portfolio. Give it a few days before you judge it. Nothing real is at risk.', 'تراقب الأسعار الحية وتسجل صفقات تجريبية في المحفظة. امنحها بضعة أيام قبل الحكم عليها. لا شيء حقيقي معرّض للخطر.')}</p>
+      <div class="fr-actions"><button type="button" class="btn btn-primary" data-action="nav" data-view="portfolio">${T3('See practice trades', 'عرض الصفقات التجريبية')}</button>${dismiss}</div></div>`;
+  }
+  const summary = bt ? T3(`Backtest on real history: ${bt.trades} trades, ${fmtPct(bt.totalReturn)} return, ${bt.maxDrawdown}% worst drop, after typical fees and slippage. ${bt.totalReturn <= 0 ? 'It lost money in this test, so consider changing the rules before you practise it. ' : ''}Check the robustness score below before you trust it.`, `الاختبار على تاريخ حقيقي: ${bt.trades} صفقة، عائد ${fmtPct(bt.totalReturn)}، أسوأ تراجع ${bt.maxDrawdown}% بعد الرسوم والانزلاق المعتادين. راجع درجة المتانة أدناه قبل أن تثق به.`)
+    : T3('The backtest could not run because no real price history was found for this instrument. You can still practise it.', 'تعذر الاختبار لعدم وجود تاريخ أسعار حقيقي لهذا الأصل. ما زال بإمكانك تجربته.');
+  return `<div class="panel panel-pad fr-banner">${head}<p>${esc(summary)}</p>
+    <div class="fr-actions"><button type="button" class="btn btn-primary" data-action="deploy-strategy" data-id="${s.id}" data-mode="demo">${icon('play')} ${T3('Practise with pretend money', 'جرّبها بمال تجريبي')}</button>${dismiss}</div></div>`;
+}
+async function frQuickBacktest() {
+  ensureDraft();
+  const d = State.draft;
+  if (!d.name || !d.name.trim()) d.name = (d.symbol || 'My') + ' strategy';
+  if (!(d.stopLoss > 0)) { toast('Set a stop-loss first. Every strategy needs one.', 'err'); return; }
+  toast('Saving…', 'info');
+  const ok = await saveStrategyChecked(d, true, null, { stay: true });
+  const s = ok ? State.user.strategies.find(x => x.id === d.id) : null;
+  if (!s) return;
+  State.draft = null; State.editingId = null; State.aiGenSummary = null; State.aiGenUsedRealAi = false;
+  State.detailId = s.id; State.view = 'detail'; State.firstRun = { step: 'practice', id: s.id, loading: true };
+  window.scrollTo(0, 0); render();
+  try { await loadRealBars(s.symbol, s.timeframe, true); } catch (e) {}
+  let okBt = false;
+  try { okBt = applyBacktest(s, s.id); } catch (e) { console.error(e); }
+  if (!okBt) toast(s.backtestError || 'No real price history is available for this instrument.', 'err');
+  if (State.firstRun) State.firstRun.loading = false;
+  saveUser(); render();
+  loadLiveTradeLog(State.detailId); loadRealLiveStatus(); restoreFullBacktestLog(State.detailId); pfLoadSimTrades(true);
+}
+
 function renderDashboard() {
   const u = State.user;
   const billing = billingDisplay();
@@ -7155,8 +7506,8 @@ function renderDashboard() {
     <div><h2>${greeting}, ${esc(firstName)}</h2><p class="muted">${strategies.length ? T3(`You've built ${strategies.length} strateg${strategies.length === 1 ? 'y' : 'ies'}${active.length ? `, ${active.length} currently active` : ''}.`, `أنشأت ${strategies.length} من الاستراتيجيات${active.length ? `، ${active.length} منها نشطة حاليًا` : ''}.`) : T3('Let\u2019s build your first strategy.', 'لنبنِ استراتيجيتك الأولى.')}</p></div>
     <div class="dash-actions">
       ${(u.streak || 0) > 0 ? `<div class="streak-chip"><span class="ic-wrap">${icon('fire')}</span> ${T3(u.streak + '-day streak', u.streak + ' أيام متتالية')}</div>` : ''}
-      <button class="btn btn-outline btn-sm" data-action="open-ai-generate">✨ ${T3('Describe a strategy', 'صف استراتيجية')}</button>
-      <button class="btn btn-primary btn-sm" data-action="new-strategy">${icon('plus')} ${T3('New strategy', 'استراتيجية جديدة')}</button>
+      <button class="btn btn-primary btn-sm" data-action="open-ai-generate">✨ ${T3('Describe a strategy', 'صف استراتيجية')}</button>
+      <button class="btn btn-outline btn-sm" data-action="new-strategy">${icon('plus')} ${T3('Build manually', 'ابنِ يدويًا')}</button>
     </div>
   </div>
   ${(realOpenCount > 0 || realWatchingCount > 0) ? `<div class="quick-actions-row">
@@ -7171,6 +7522,7 @@ function renderDashboard() {
       { done: brokersConnected > 0 && active.length > 0, t: T3('Connect a paper broker and deploy to demo', 'اربط وسيطًا ورقيًا وانشر تجريبيًا'), d: T3('Paper trading uses practice money at real prices. Then click Deploy to demo.', 'التداول الورقي يستخدم مالًا تجريبيًا بأسعار حقيقية. ثم اضغط النشر التجريبي.'), cta: brokersConnected > 0 ? T3('Go to My strategies', 'اذهب إلى استراتيجياتي') : T3('Connect a broker', 'اربط وسيطًا'), a: 'nav', attrs: `data-view="${brokersConnected > 0 ? 'strategies' : 'broker'}"` },
       { done: strategies.some(x => x.status === 'live'), t: T3('Watch it, then decide', 'راقبها ثم قرر'), d: T3('Review it for a few days in Journal. Go live only when ready, with a small size.', 'راجعها لعدة أيام في السجل. ابدأ الحقيقي عندما تكون جاهزًا وبحجم صغير.'), cta: T3('Open Journal', 'افتح السجل'), a: 'nav', attrs: 'data-view="journal"' },
     ];
+    if (!strategies.length) return renderDescribeHero();
     if (qs.every(x => x.done)) return nextCard;
     const cur = qs.findIndex(x => !x.done);
     return `<section class="panel quick-start" aria-label="${T3('Quick start', 'البداية السريعة')}">
@@ -7206,7 +7558,7 @@ function renderDashboard() {
   ${brokerLess ? `<div class="panel compact-note" style="margin-top:16px;">
     <p><b>${T3('No broker connected yet.', 'لا يوجد وسيط مرتبط بعد.')}</b> ${T3('Connect one to see your real balance and set daily loss limits. Demo trades are simulated and never counted as real money.', 'اربط وسيطًا لعرض رصيدك الحقيقي وضبط حدود الخسارة اليومية. الصفقات التجريبية محاكاة ولا تُحتسب كأموال حقيقية.')}</p>
     <button class="btn btn-outline btn-sm" data-action="nav" data-view="broker">${icon('broker')} ${T3('Connect a broker', 'اربط وسيطًا')}</button>
-  </div>` : `<div style="margin-top:16px;">${renderRealCapitalPanel()}${renderRiskPanel()}</div>`}
+  </div>` : `<div style="margin-top:16px;">${renderRealCapitalPanel()}${renderRiskPanel()}${renderGuardPanel()}</div>`}
   <details class="more-stats">
     <summary>${T3('More numbers', 'المزيد من الأرقام')}</summary>
   <div class="grid-4">
@@ -7308,8 +7660,52 @@ async function loadRiskStatus() {
     if (State.view === 'dashboard' || State.view === 'portfolio') render();
   } catch (e) {}
 }
+
+/* ---- Server safety guard (opt-in): hard limits, safe orders, monitoring ---- */
+async function loadGuardStatus() {
+  if (!(await backendAvailable())) return;
+  try {
+    const res = await fetch('/api/guard', { headers: authHeaders() });
+    if (!res.ok) return;
+    State.guardStatus = await res.json();
+    if (State.view === 'dashboard' || State.view === 'portfolio') render();
+  } catch (e) {}
+}
+function guardWhen(v) { try { return new Date(v).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+function renderGuardPanel() {
+  const g0 = State.guardStatus;
+  if (!g0) return '';
+  const g = g0.guard || {}, sch = g0.scheduler || {}, ev = g0.events || [];
+  const lim = [g.maxDailyLossPct ? `daily loss ${g.maxDailyLossPct}%` : '', g.maxOpenTrades ? `${g.maxOpenTrades} open trade${g.maxOpenTrades === 1 ? '' : 's'}` : '', g.maxLosingStreak ? `pause after ${g.maxLosingStreak} losses in a row` : ''].filter(Boolean);
+  const halted = g.haltedToday || g.streakHalted;
+  const badge = !g.enabled ? '<span class="badge badge-dim">OFF</span>' : halted ? '<span class="badge badge-short">PAUSED</span>' : '<span class="badge badge-long">ON</span>';
+  const sevColor = { error: 'var(--short)', warn: 'var(--warn, #F5C451)', info: 'var(--text-faint, #7A6D8E)' };
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">
+    <div class="panel-head"><h3>${icon('shield')} Safety and reliability</h3>${badge}</div>
+    ${g.enabled ? `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px;">
+        <div class="panel stat-card"><div class="label">Server limits</div><div class="delta muted" style="font-size:12.5px;line-height:1.5;">${lim.length ? esc(lim.join(' · ')) : 'No limits set yet'}</div></div>
+        <div class="panel stat-card"><div class="label">Scheduler</div><div class="value" style="font-size:16px;color:${sch.ok ? 'var(--long)' : 'var(--short)'}">${sch.ok ? 'Running' : 'Stalled'}</div><div class="delta muted">last check ${sch.lastTickAgoSec === undefined ? 'N/A' : sch.lastTickAgoSec + 's ago'}</div></div>
+        <div class="panel stat-card"><div class="label">Orders awaiting confirmation</div><div class="value" style="font-size:16px;">${g0.pendingOrders || 0}</div><div class="delta muted">${g0.pendingOrders ? 'being matched with your broker' : 'none in flight'}</div></div>
+      </div>
+      ${halted ? `<p style="font-size:13px;color:var(--short);margin:0 0 10px;">${esc(g.haltedReason || g.streakReason || 'New entries are paused.')}</p>` : ''}
+      ${ev.length ? `<div style="font-size:12px;margin:0 0 10px;"><div class="faint" style="margin-bottom:4px;">RECENT</div>${ev.slice(0, 6).map(e => `<div style="display:flex;gap:8px;padding:3px 0;"><span class="faint mono" style="flex:none;">${esc(guardWhen(e.at))}</span><span style="color:${sevColor[e.severity] || 'inherit'}">${esc(e.detail || e.kind)}</span></div>`).join('')}</div>` : ''}`
+    : `<p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 10px;">Optional. When on, the server enforces your daily loss cap, maximum open trades and a losing-streak pause on every new order, so a bug or a closed browser cannot get around them. Orders carry a unique ID and are matched with your broker after any restart, so a restart cannot place the same trade twice. VaticTrader also watches its own scheduler and tells you if it stops, if an order fails, or if your broker and VaticTrader disagree about a position.</p>`}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn ${g.enabled ? 'btn-outline' : 'btn-primary'} btn-sm" data-action="open-guard">${icon('settings')} ${g.enabled ? 'Edit settings' : 'Turn on'}</button>
+      ${halted ? `<button class="btn btn-ghost btn-sm" data-action="guard-resume">Resume entries</button>` : ''}
+    </div>
+    <p class="faint" style="font-size:11.5px;margin:10px 0 0;line-height:1.5;">Limits only restrict new entries. They never close a position you already hold, and each position keeps its own stop-loss. They apply to automated trading through Alpaca.</p>
+  </div>`;
+}
+async function guardSave(body, okMsg) {
+  const res = await fetch('/api/guard', { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()), body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Could not save the safety settings.');
+  await loadGuardStatus(); if (okMsg) toast(okMsg, 'ok');
+}
 async function loadRealPortfolio() {
-  loadRiskStatus();
+  loadRiskStatus(); loadGuardStatus();
   if (!(await backendAvailable())) { State.realPortfolio = { unavailable: true }; return; }
   try {
     const res = await fetch('/api/portfolio/real', { headers: authHeaders() });
@@ -8079,19 +8475,57 @@ function simTradesTable(list, withStrategy) {
   return `<div style="overflow:auto;max-height:480px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:${withStrategy ? 960 : 840}px;">
     <thead><tr class="faint" style="font-size:10.5px;text-align:right;position:sticky;top:0;background:var(--panel);"><th style="text-align:left;padding:6px 8px 8px 0;">${T3('OPENED', 'الفتح')}</th><th style="text-align:left;padding:6px 8px 8px;">${T3('CLOSED', 'الإغلاق')}</th>${withStrategy ? `<th style="text-align:left;padding:6px 8px 8px;">${T3('STRATEGY', 'الاستراتيجية')}</th>` : ''}<th style="text-align:left;padding:6px 8px 8px;">${T3('SYMBOL', 'الرمز')}</th><th style="padding:6px 8px 8px;">${T3('SIDE', 'الاتجاه')}</th><th style="padding:6px 8px 8px;">${T3('ENTRY', 'الدخول')}</th><th style="padding:6px 8px 8px;">${T3('EXIT', 'الخروج')}</th><th style="padding:6px 8px 8px;">P&amp;L</th><th style="padding:6px 8px 8px;">%</th><th style="padding:6px 0 8px 8px;">${T3('RESULT', 'النتيجة')}</th></tr></thead>
     <tbody>${shown.map(t => { const dec = priceDecimals(t.symbol), open = t.status === 'open';
-      const why = { take_profit: T3('Take profit', 'جني الربح'), stop_loss: T3('Stop loss', 'وقف الخسارة'), trailing_stop: T3('Trailing stop', 'وقف متحرك'), stopped: T3('Strategy stopped', 'أوقفت'), redeployed: T3('Redeployed', 'أعيد نشرها') }[t.closeReason] || T3('Closed', 'مغلقة');
+      const why = { take_profit: T3('Take profit', 'جني الربح'), stop_loss: T3('Stop loss', 'وقف الخسارة'), trailing_stop: T3('Trailing stop', 'وقف متحرك'), stopped: T3('Strategy stopped', 'أوقفت'), manual: T3('Closed by you', 'أغلقتها يدويًا'), redeployed: T3('Redeployed', 'أعيد نشرها') }[t.closeReason] || T3('Closed', 'مغلقة');
       return `<tr style="border-top:1px solid var(--border-soft);text-align:right;">
       <td class="mono faint" style="text-align:left;padding:9px 8px 9px 0;white-space:nowrap;">${fmtTs(t.openedAt)}</td>
       <td class="mono faint" style="text-align:left;padding:9px 8px;white-space:nowrap;">${t.closedAt ? fmtTs(t.closedAt) : `<span class="faint">${T3('Still open', 'ما زالت مفتوحة')}</span>`}</td>
-      ${withStrategy ? `<td style="text-align:left;padding:9px 8px;"><b>${esc(t.strategyName || '')}</b></td>` : ''}
+      ${withStrategy ? `<td style="text-align:left;padding:9px 8px;"><b>${esc(t.strategyName || '')}</b>${simStrategyStopped(t.strategyId) ? ` <span class="badge badge-dim" style="margin-left:4px;">${T3('Stopped', 'متوقفة')}</span>` : ''}</td>` : ''}
       <td class="mono" style="text-align:left;padding:9px 8px;">${esc(t.symbol)}</td>
       <td style="padding:9px 8px;"><span class="badge ${t.side === 'sell' ? 'badge-short' : 'badge-long'}">${t.side === 'sell' ? 'SHORT' : 'LONG'}</span></td>
       <td class="mono" style="padding:9px 8px;">${Number(t.entryPrice).toFixed(dec)}</td>
       <td class="mono" style="padding:9px 8px;">${t.exitPrice !== null && t.exitPrice !== undefined ? Number(t.exitPrice).toFixed(dec) : '<span class="faint">N/A</span>'}</td>
       <td class="mono" style="padding:9px 8px;color:${plColor(t.pl || 0)}">${t.pl === null || t.pl === undefined ? '<span class="faint">N/A</span>' : fmtSigned(t.pl)}</td>
       <td class="mono" style="padding:9px 8px;color:${plColor(t.plPct || 0)}">${t.plPct === null || t.plPct === undefined ? '<span class="faint">N/A</span>' : fmtPct(t.plPct)}</td>
-      <td style="padding:9px 0 9px 8px;">${open ? `<span class="badge badge-info"><span class="dot"></span>${T3('Open', 'مفتوحة')}</span>` : `<span class="badge badge-dim">${why}</span>`}</td></tr>`; }).join('')}</tbody></table></div>
+      <td style="padding:9px 0 9px 8px;">${open ? `<span class="badge badge-info"><span class="dot"></span>${T3('Open', 'مفتوحة')}</span> <button class="btn btn-outline btn-sm" style="margin-left:6px;" data-action="sim-close-trade" data-id="${esc(t.strategyId)}">${T3('Close trade', 'أغلق الصفقة')}</button>` : `<span class="badge badge-dim">${why}</span>`}</td></tr>`; }).join('')}</tbody></table></div>
     ${list.length > shown.length ? `<div style="text-align:center;margin-top:12px;"><button class="btn btn-outline btn-sm" data-action="sim-trades-more">${T3('Show more', 'عرض المزيد')} (${list.length - shown.length})</button></div>` : ''}`;
+}
+
+function simStrategyStopped(id) {
+  const s = (State.user.strategies || []).find(x => x.id === id);
+  return !s || s.status !== 'demo';
+}
+function simIsCollapsed(k) { try { return localStorage.getItem('vt_sim_collapsed_' + k) === '1'; } catch (e) { return !!(V3.simCol && V3.simCol[k]); } }
+function simSetCollapsed(k, v) { V3.simCol = V3.simCol || {}; V3.simCol[k] = v; try { localStorage.setItem('vt_sim_collapsed_' + k, v ? '1' : '0'); } catch (e) {} }
+// Header controls for a practice panel. scope 'all' = Portfolio panel, otherwise a strategy id.
+function simPanelControls(scope, trades, demoN) {
+  const col = simIsCollapsed(scope === 'all' ? 'all' : 'one');
+  const hasClosed = trades.some(t => t.status === 'closed');
+  const btn = (a, label, extra) => `<button class="btn btn-outline btn-sm" data-action="${a}" data-id="${esc(scope)}" ${extra || ''}>${label}</button>`;
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+    ${scope === 'all' && demoN > 0 ? btn('sim-stop-all', T3('Stop all demo', 'أوقف كل التجريبية')) : ''}
+    ${scope !== 'all' ? btn('undeploy-strategy', T3('Stop strategy', 'أوقف الاستراتيجية')) : ''}
+    ${hasClosed ? btn('sim-clear', T3('Clear practice history', 'مسح سجل التدريب')) : ''}
+    ${btn('sim-toggle', col ? T3('Show', 'عرض') : T3('Hide', 'إخفاء'), `aria-expanded="${col ? 'false' : 'true'}"`)}
+  </div>`;
+}
+async function simClearHistory(scope) {
+  if (!(await backendAvailable())) { toast('This needs the real backend running.', 'err'); return; }
+  const r = await v3api('POST', '/api/sim/clear', scope === 'all' ? {} : { strategyId: scope });
+  if (!r.ok) { toast((r.data && r.data.error) || 'Could not clear practice history.', 'err'); return; }
+  toast(`Cleared ${r.data.deleted || 0} practice trade${r.data.deleted === 1 ? '' : 's'}.`, 'ok');
+  await pfLoadSimTrades(true); render();
+}
+async function simCloseTrade(strategyId) {
+  if (!(await backendAvailable())) { toast('This needs the real backend running.', 'err'); return; }
+  const r = await v3api('POST', '/api/sim/close/' + encodeURIComponent(strategyId));
+  if (!r.ok) { toast((r.data && r.data.error) || 'Could not close the trade.', 'err'); await pfLoadSimTrades(true); return; }
+  toast('Practice trade closed at the latest price.', 'ok');
+  await pfLoadSimTrades(true); render();
+}
+async function simStopAll() {
+  const list = (State.user.strategies || []).filter(x => x.status === 'demo');
+  for (const st of list) await undeployStrategy(st.id);
+  toast(`Stopped ${list.length} demo strateg${list.length === 1 ? 'y' : 'ies'}.`, 'ok');
 }
 function renderSimTradesPanel() {
   const st = V3.simTrades;
@@ -8099,25 +8533,37 @@ function renderSimTradesPanel() {
   if (!st) { pfLoadSimTrades(); return ''; }
   if (st.unavailable || (!st.trades.length && !demoN)) return '';
   const head = `<div class="panel-head"><h3>${icon('play')} ${T3('Simulated forward-testing', 'اختبار أمامي محاكى')}</h3><span class="badge badge-info">${T3('Practice, no real money', 'تدريب، بلا أموال حقيقية')}</span></div>`;
+  const ctl = `<div style="margin:-4px 0 12px;">${simPanelControls('all', st.trades, demoN)}</div>`;
+  if (simIsCollapsed('all')) return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${ctl}<p class="faint" style="font-size:12px;margin:0;">${st.trades.length} ${T3('simulated trades hidden', 'صفقة مخفية')}</p></div>`;
   const a = pfAnalytics(st.trades);
   const sum = a ? `<p style="font-size:13px;margin:0 0 12px;"><b>${st.trades.length}</b> ${T3('simulated trades', 'صفقة محاكاة')} · <b>${a.winRate.toFixed(0)}%</b> ${T3('win rate', 'نسبة ربح')} · ${T3('net', 'الصافي')} <b style="color:${plColor(a.net)}">${fmtSigned(a.net)}</b> ${T3('on a virtual $10,000', 'على 10,000$ افتراضية')} · ${T3('profit factor', 'معامل الربح')} <b>${a.profitFactor === null ? 'N/A' : a.profitFactor === Infinity ? 'no losses' : a.profitFactor.toFixed(2)}</b>${a.n < 30 ? ` <span class="faint">(${T3('too few closed trades to judge', 'عدد قليل لا يكفي للحكم')})</span>` : ''}</p>` : '';
   const note = `<p class="faint" style="font-size:11.5px;margin:10px 0 0;line-height:1.5;">${T3('Demo strategies are checked about once a minute on live prices (your Alpaca data for US tickers when connected, otherwise Yahoo Finance, which can be delayed). Entries use the last bar close, exits use later bars, a stop wins if a bar touches both levels, and a 0.1% round-trip cost is charged. No order is ever sent to a broker, and real fills can differ. Only this page records these trades, they never touch your real totals.', 'تُفحص الاستراتيجيات التجريبية مرة كل دقيقة تقريبا على أسعار حية. يستخدم الدخول إغلاق آخر شمعة والخروج الشموع اللاحقة، ويفوز الوقف إذا لمست الشمعة المستويين، وتُحتسب تكلفة 0.1% للصفقة. لا يُرسل أي أمر لأي وسيط وقد تختلف التنفيذات الحقيقية. لا تدخل هذه الصفقات في إجمالياتك الحقيقية.')}</p>`;
-  return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${sum}${st.trades.length ? simTradesTable(st.trades, true) : `<p class="muted" style="font-size:13px;margin:0;">${T3('Waiting for a first signal. Each demo strategy is watching live prices, and every simulated entry and exit will appear here.', 'بانتظار أول إشارة. كل استراتيجية تجريبية تراقب الأسعار وستظهر هنا كل عمليات الدخول والخروج المحاكاة.')}</p>`}${note}</div>`;
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">${head}${ctl}${sum}${st.trades.length ? simTradesTable(st.trades, true) : `<p class="muted" style="font-size:13px;margin:0;">${T3('Waiting for a first signal. Each demo strategy is watching live prices, and every simulated entry and exit will appear here.', 'بانتظار أول إشارة. كل استراتيجية تجريبية تراقب الأسعار وستظهر هنا كل عمليات الدخول والخروج المحاكاة.')}</p>`}${note}</div>`;
 }
 function renderSimTradeLogSection(s) {
-  if (s.status !== 'demo') return '';
+  if (s.status !== 'demo') {
+    // Stopped: keep the practice history visible, clearly marked, with a way to clear it.
+    const old = V3.simTrades && !V3.simTrades.unavailable ? V3.simTrades.trades.filter(t => t.strategyId === s.id) : [];
+    if (!old.length) return '';
+    return `<div class="panel panel-pad" style="margin-bottom:16px;">
+      <div class="panel-head"><h3>${icon('play')} ${T3('Simulated trades', 'الصفقات المحاكاة')} <span class="badge badge-dim" style="margin-left:6px;">${T3('Stopped', 'متوقفة')}</span></h3></div>
+      <p class="muted" style="font-size:13px;margin:0 0 10px;">${T3('This strategy is not running in demo mode any more. Deploy it again to resume practice trading.', 'هذه الاستراتيجية لم تعد تعمل في الوضع التجريبي. انشرها مجددًا لاستئناف التدريب.')}</p>
+      <div style="margin:0 0 12px;"><button class="btn btn-outline btn-sm" data-action="sim-clear" data-id="${esc(s.id)}">${T3('Clear practice history', 'مسح سجل التدريب')}</button></div>
+      ${simTradesTable(old, false)}</div>`;
+  }
   const st = V3.simTrades;
   if (!st) { pfLoadSimTrades(); return ''; }
   const mine = (st.trades || []).filter(t => t.strategyId === s.id);
   return `<div class="panel panel-pad" style="margin-bottom:16px;">
     <div class="panel-head"><h3>${icon('play')} ${T3('Simulated trades', 'الصفقات المحاكاة')} <span class="badge badge-info" style="margin-left:6px;">${T3('Practice, no real money', 'تدريب')}</span></h3>${mine.length ? `<span class="faint" style="font-size:11.5px;">${mine.length} ${T3('trades', 'صفقة')}</span>` : ''}</div>
-    ${mine.length ? simTradesTable(mine, false) : `<p class="muted" style="font-size:13px;margin:0;">${st.unavailable ? T3('Simulated trades need the VaticTrader backend.', 'تحتاج الصفقات المحاكاة إلى الخادم.') : T3('Watching live prices. The first simulated entry will appear here.', 'تراقب الأسعار الحية. سيظهر هنا أول دخول محاكى.')}</p>`}
+    <div style="margin:-4px 0 12px;">${simPanelControls(s.id, mine, 1)}</div>
+    ${simIsCollapsed('one') ? '' : mine.length ? simTradesTable(mine, false) : `<p class="muted" style="font-size:13px;margin:0;">${st.unavailable ? T3('Simulated trades need the VaticTrader backend.', 'تحتاج الصفقات المحاكاة إلى الخادم.') : T3('Watching live prices. The first simulated entry will appear here.', 'تراقب الأسعار الحية. سيظهر هنا أول دخول محاكى.')}</p>`}
   </div>`;
 }
 
 function renderRealPortfolioSections(strategies, extra) {
   const c = realCapitalSummary();
-  let html = renderRealCapitalPanel() + (extra || '') + renderRiskPanel();
+  let html = renderRealCapitalPanel() + (extra || '') + renderRiskPanel() + renderGuardPanel();
   if (!c.b) return html;
   const rp = c.rp;
   const eq = c.b.equity || 0;
@@ -9083,6 +9529,9 @@ function renderPostCard(e, opts) {
 
 /* --------------------------------- TEMPLATES / EXAMPLE STRATEGIES ---------------- */
 const TPL_PAGE = 24;
+const STARTER_NAMES = ['AAPL RSI Oversold Bounce', 'SPY Golden Cross 50/200', 'Aramco Steady Climber', 'BTC/USD EMA 12/26 Trend with ADX', 'EUR/USD RSI Oversold Bounce', 'BTC/USD Donchian 20-Bar Breakout', 'NVDA Money Flow Oversold with Volume', 'HSBA.L Golden Cross 50/200'];
+function tplStarters() { return STARTER_NAMES.map(n => { const i = TEMPLATES.findIndex(t => t.name === n); return i < 0 ? null : { t: TEMPLATES[i], i }; }).filter(Boolean); }
+function tplIsFiltering() { return !!(State.tplShowAll || (State.tplQuery || '').trim() || (State.tplMarket && State.tplMarket !== 'All') || (State.tplFamily && State.tplFamily !== 'All') || (State.tplDir && State.tplDir !== 'All')); }
 function tplFiltered() {
   const m = State.tplMarket || 'All', f = State.tplFamily || 'All', q = (State.tplQuery || '').trim().toLowerCase(), dr = State.tplDir || 'All';
   return TEMPLATES.map((t, i) => ({ t, i })).filter(({ t }) =>
@@ -9135,6 +9584,7 @@ function tplHero() {
     <div class="tp-tiles">${tiles}</div><div class="tp-fams">${fams}</div></div>`;
 }
 function renderTemplateResults() {
+  if (!tplIsFiltering()) return `<div class="strategy-grid">${tplStarters().map(({ t, i }) => renderTemplateCard(t, i)).join('')}</div>`;
   const list = tplFiltered(), n = State.tplLimit || TPL_PAGE;
   if (!list.length) return `<div class="panel"><div class="empty-state" style="padding:40px 20px;">${icon('search')}<p>${T3('No strategies match. Try another market, style or search word.', 'لا توجد استراتيجيات مطابقة. جرّب سوقًا أو نمطًا أو كلمة بحث أخرى.')}</p></div></div>`;
   return `<div class="faint" style="font-size:12px;margin-bottom:10px;">${T3('Showing', 'عرض')} ${Math.min(n, list.length)} ${T3('of', 'من')} ${list.length}</div>
@@ -9248,7 +9698,7 @@ async function screenRun() {
   const cfg = screenCfg(), plan = screenPlan(cfg);
   if (!plan.runs.length) { toast(cfg.set === 'custom' ? 'Type some symbols first.' : 'Nothing to test. Check the filters above, or add a strategy.', 'info'); return; }
   if (plan.runs.length > SCREEN_MAX_RUNS) { toast(`That is ${plan.runs.length} tests. The limit is ${SCREEN_MAX_RUNS}. Narrow the filters or the symbol list.`, 'err'); return; }
-  const rt = 2 * (backtestCosts().feePct + backtestCosts().slipPct);
+  const rt = State.user && State.user.btCosts ? costRoundTrip('AAPL') : null; // null = typical costs for each symbol's asset class
   State.screen = { running: true, cancel: false, rows: [], rt, total: plan.runs.length, cfg: JSON.parse(JSON.stringify(cfg)), started: Date.now() };
   State.screenSel = []; State.screenSort = null;
   screenPaint();
@@ -9265,9 +9715,9 @@ async function screenRun() {
     const row = { key: [run.kind, run.kind === 'tpl' ? run.t.name : run.s.id, spec.symbol].join('|'), kind: run.kind, ref: run.kind === 'tpl' ? run.t.name : run.s.id, name: run.name, symbol: spec.symbol, tf: spec.timeframe, dir: spec.direction, tp: spec.takeProfit, sl: spec.stopLoss };
     if (!hit || !hit.bars || hit.bars.length < 150) { row.verdict = 'No data'; row.rank = 9; row.reasons = [(hit && hit.error) || 'No real price history for this symbol and timeframe.']; rows.push(row); }
     else {
-      let m = null; try { m = screenEval(spec, hit.bars, rt); } catch (e) { m = null; }
+      let m = null; const rtRow = costRoundTrip(spec.symbol); try { m = screenEval(spec, hit.bars, rtRow); } catch (e) { m = null; }
       if (!m) { row.verdict = 'No data'; row.rank = 9; row.reasons = ['This strategy could not be evaluated.']; }
-      else Object.assign(row, m, screenVerdict(spec, m, rt));
+      else Object.assign(row, m, screenVerdict(spec, m, rtRow));
       rows.push(row);
     }
     if (i % 4 === 3) { screenProgress(`Testing ${i + 1} of ${plan.runs.length}`, 0.4 + 0.6 * (i + 1) / plan.runs.length); await screenTick(); }
@@ -9372,7 +9822,7 @@ function screenPanelInner() {
   if (running) mid = `<div style="margin:12px 0 4px;"><div id="scr-prog-t" class="muted" style="font-size:13px;margin-bottom:6px;">Starting…</div><div style="height:8px;border-radius:5px;background:rgba(148,163,184,.2);"><div id="scr-prog-b" style="height:100%;width:2%;border-radius:5px;background:var(--brand,#ff4fa3);transition:width .2s;"></div></div></div>`;
   else if (sc && sc.rows && sc.rows.length) {
     const pass = sc.rows.filter(r => r.verdict === 'Passes').length, nod = sc.rows.filter(r => r.verdict === 'No data').length, fresh = sc.finished ? new Date(sc.finished).toLocaleString() : '';
-    mid = `<div style="font-size:13px;margin:14px 0 2px;"><b>${pass}</b> of ${sc.rows.length} passed${nod ? ` · ${nod} had no real price history` : ''} · costs ${sc.rt.toFixed(2)}% per round trip (doubled for the stress test) · <span class="faint">${sc.cancelled ? 'stopped early, ' : ''}run ${esc(fresh)}${sc.restored ? ' (saved from your last visit)' : ''}</span></div>
+    mid = `<div style="font-size:13px;margin:14px 0 2px;"><b>${pass}</b> of ${sc.rows.length} passed${nod ? ` · ${nod} had no real price history` : ''} · ${sc.rt === null || sc.rt === undefined ? 'costs typical for each asset class (about 0.04% for forex up to 0.30% for crypto, doubled for the stress test)' : 'costs ' + sc.rt.toFixed(2) + '% per round trip (doubled for the stress test)'} · <span class="faint">${sc.cancelled ? 'stopped early, ' : ''}run ${esc(fresh)}${sc.restored ? ' (saved from your last visit)' : ''}</span></div>
       <div class="faint" style="font-size:11.5px;margin-bottom:6px;">The more strategies and symbols you test, the more likely some look good by chance. Treat "Passes" as a shortlist to demo-trade, not as a promise.</div>
       <div id="scr-results">${screenResultsInner()}</div>`;
   }
@@ -9401,11 +9851,23 @@ async function screenMaterialize(row) {
   if (!(await saveUser())) return null; track('strategy_created'); return d;
 }
 
+function renderTemplateStarters() {
+  return `<div id="tpl-starter-mode" class="panel panel-pad" style="margin-bottom:16px;">
+    <div class="fr-kicker">${T3('Starter picks', 'اختيارات البداية')}</div>
+    <h3 style="margin:4px 0 6px;font-size:20px;">${T3('Eight well-known ideas to start from', 'ثماني أفكار معروفة للبدء')}</h3>
+    <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 12px;">${T3('Each one is a long-standing technique across stocks, forex and crypto. None promises a return. Tap Use this template, then Save and backtest on real data. Prefer your own idea? Describe it in a sentence instead.', 'كل واحدة تقنية قديمة ومدروسة عبر الأسهم والفوركس والعملات المشفرة. لا شيء منها يعد بعائد. اضغط استخدام القالب ثم احفظ واختبر على بيانات حقيقية. تفضّل فكرتك؟ صفها بجملة.')}</p>
+    <div class="filter-row" style="margin:0;"><div class="search-box">${icon('search')}<input class="input" placeholder="${T3('Search all ' + TEMPLATES.length + ' strategies or symbols…', 'ابحث في ' + TEMPLATES.length + ' استراتيجية أو رمز…')}" value="${esc(State.tplQuery || '')}" data-field="tpl-search"></div>
+      <button type="button" class="btn btn-outline btn-sm" data-action="open-ai-generate">✨ ${T3('Describe a strategy', 'صف استراتيجية')}</button></div>
+  </div>
+  <div id="tpl-results">${renderTemplateResults()}</div>
+  <div style="text-align:center;margin:18px 0;"><button class="btn btn-outline" data-action="tpl-browse-all">${T3('Browse all ' + TEMPLATES.length + ' ready-made strategies', 'تصفح كل الـ' + TEMPLATES.length + ' استراتيجية الجاهزة')}</button></div>`;
+}
 function renderTemplates() {
+  if (!tplIsFiltering()) return renderTemplateStarters();
   const markets = ['All', 'US stocks', 'UK stocks', 'Forex', 'Crypto', 'Other'], fams = ['All', 'Day trading', 'Scalping', 'Trend', 'Mean reversion', 'Breakout', 'Momentum'];
   const m = State.tplMarket || 'All', f = State.tplFamily || 'All';
   const count = (mk) => TEMPLATES.filter(t => mk === 'All' || templateMarket(t) === mk).length;
-  return `${tplHero()}<div class="panel panel-pad" style="margin-bottom:16px;">
+  return `<div style="margin-bottom:12px;"><button type="button" class="btn btn-ghost btn-sm" data-action="tpl-starters">${icon('back')} ${T3('Back to starter picks', 'العودة إلى اختيارات البداية')}</button></div>${tplHero()}<div class="panel panel-pad" style="margin-bottom:16px;">
     <h3 style="margin-bottom:6px;">${T3('How to use them', 'كيف تستخدمها')}</h3>
     <p class="muted" style="font-size:13px;line-height:1.6;margin:0;">${T3('Built on long-standing, widely studied techniques (RSI, Bollinger Bands, MACD, moving-average crossovers, Turtle-style breakouts) for US stocks, UK stocks, forex and crypto, including day-trading and 1-minute scalping ideas. Each card says where the idea comes from. None of them promises a return: use Use this template, run a backtest on real data, check the cost-adjusted and out-of-sample figures, then start in demo with a small size.', 'مبنية على تقنيات معروفة ومدروسة على نطاق واسع (RSI وبولينجر وMACD وتقاطع المتوسطات والاختراقات على طريقة السلاحف) للأسهم الأمريكية والفوركس والعملات المشفرة. كل بطاقة توضح أصل الفكرة. لا شيء منها يعد بعائد: استخدم القالب ثم شغّل اختبارًا على بيانات حقيقية وراجع الأرقام بعد التكاليف وخارج العينة ثم ابدأ تجريبيًا بحجم صغير.')}</p>
   </div>
@@ -9587,6 +10049,7 @@ function renderDetail() {
     </div>
   </div>
   ${s.copiedFromId && String(s.copiedFromId).indexOf('template:') !== 0 ? `<div class="panel panel-pad" style="margin-bottom:16px;border-left:3px solid var(--brand,#6aa9ff);font-size:13px;line-height:1.6;"><b>This is your copy of a community strategy.</b> It is a draft: nothing is deployed and no orders are placed. ${bt ? 'The numbers below are from your own backtest.' : 'It has no results of its own yet. Press Backtest to test it with your settings before you go live.'} You can edit any rule. Changes by the original trader will not change your copy.</div>` : ''}
+  ${frDetailBanner(s)}
   ${v3DetailExtras(s)}
   ${renderLiveChart(s)}
   ${renderStrategyChat(s)}
@@ -11028,6 +11491,7 @@ function renderBuilder() {
         <div class="ai-summary-list">${State.aiGenSummary.map(m => `<span class="ai-summary-chip">${esc(m)}</span>`).join('')}</div>
         <div class="hint" style="margin-top:8px;">${State.aiGenUsedRealAi ? 'This was translated by an AI model, it only maps your words onto the builder\'s fields, never adds anything you didn\'t describe.' : 'This was matched by keywords, not read by an AI model, check each field below and adjust anything that\'s off before saving.'}</div>
       </div>` : ''}
+      ${frBuilderBanner()}
       <div class="flow-toggle-row">
         <div class="auth-tabs" style="max-width:280px;margin-bottom:0;">
           <div class="auth-tab ${State.builderViewMode === 'flow' ? 'active' : ''}" data-action="builder-view" data-mode="flow">${icon('gitBranch')} Visual flow</div>
@@ -11083,6 +11547,7 @@ function renderBuilder() {
         </div>` : ''}
       </div>
 
+      ${renderGatePanel(d)}
       <div class="panel panel-pad" style="margin-bottom:16px;">
         <div class="panel-head"><h3>3 · Risk & exits</h3></div>
         <div class="row">
@@ -11147,6 +11612,56 @@ function equationHintFor(language) {
   if (language === 'mql5') return 'MQL5 style: iRSI(_Symbol,_Period,14,PRICE_CLOSE) < 30 && Close[0] > iMA(_Symbol,_Period,20,0,MODE_SMA,PRICE_CLOSE)';
   return 'Native: RSI(14) < 30 AND CLOSE > SMA(20) \u00b7 functions: RSI/SMA/EMA/BB_UPPER/BB_LOWER(n) \u00b7 CLOSE/OPEN/HIGH/LOW/VOLUME/VWAP/MACD_LINE/MACD_SIGNAL';
 }
+
+function gateEnsure(d) {
+  if (!Array.isArray(d.filterConditions)) d.filterConditions = [];
+  if (!d.eventPause) d.eventPause = { enabled: false, rates: true, earnings: true, beforeHours: 2, afterHours: 2 };
+  return d;
+}
+// Only state-style indicators ("is above / is below"). Crossovers fire for a single bar, so they make poor filters.
+function gateFilterIndicators() { return INDICATORS.filter(x => !x.customEquation && x.ops.length && x.ops.every(op => /^is (above|below)/.test(op))); }
+function renderGatePanel(d) {
+  gateEnsure(d);
+  const fl = d.filterConditions, ev = d.eventPause;
+  const cal = V3.calFor && V3.calFor[d.symbol];
+  if (ev.enabled && !cal) v3LoadCalFor(d.symbol);
+  const meta = V3.calMeta || {};
+  const upcoming = cal && cal.events ? cal.events.slice(0, 4) : [];
+  const row = (c, i) => { const ind = indicatorById(c.indicator); return `<div class="chain-node" style="margin-bottom:8px;" data-flt-id="${c.id}">
+      <div class="node-badge">${i + 1}</div>
+      <div class="node-fields">
+        <select data-field="flt-indicator" data-id="${c.id}">${gateFilterIndicators().map(x => `<option value="${x.id}" ${x.id === c.indicator ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
+        <select data-field="flt-operator" data-id="${c.id}">${ind.ops.map(op => `<option ${op === c.operator ? 'selected' : ''}>${op}</option>`).join('')}</select>
+        ${ind.novalue ? `<input class="input" value="N/A" disabled>` : `<input class="input" data-field="flt-value" data-id="${c.id}" value="${esc(c.value)}" placeholder="${ind.placeholder}">`}
+      </div>
+      <button class="node-remove" data-action="remove-filter" data-id="${c.id}">${icon('x')}</button></div>`; };
+  return `<div class="panel panel-pad" style="margin-bottom:16px;">
+    <div class="panel-head"><h3>${icon('shield')} Only trade if… <span class="faint" style="font-size:12px;font-weight:400;">(optional)</span></h3><span class="badge ${fl.length || ev.enabled ? 'badge-long' : 'badge-dim'}">${fl.length || ev.enabled ? 'ON' : 'OFF'}</span></div>
+    <p class="muted" style="font-size:13px;line-height:1.55;margin:0 0 10px;">Extra conditions that must <b>all</b> be true at the moment your entry rule fires. If one is not, the entry is skipped and the reason is logged. They only block new entries and never close a position.</p>
+    ${fl.map(row).join('')}
+    ${fl.length < 5 ? `<button class="btn btn-ghost btn-sm add-node-btn" data-action="add-filter">${icon('plus')} Add a filter</button>` : ''}
+    <div class="hint" style="margin-top:8px;">Example: your entry is "RSI is below 30", and the filter is "Price vs SMA (20) is above" so you only buy dips while price is above its average. Only "is above / is below" indicators are offered, because crossovers fire for a single bar. Filters are included in backtests.</div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft);">
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600;"><input type="checkbox" data-field="ev-enabled" ${ev.enabled ? 'checked' : ''}> Pause around big events</label>
+      <div class="hint" style="margin:4px 0 0 26px;">Skip new entries on the day of a central-bank rate decision that affects this instrument, and around its earnings report.</div>
+      ${ev.enabled ? `<div style="margin:10px 0 0 26px;display:flex;flex-direction:column;gap:8px;">
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="checkbox" data-field="ev-rates" ${ev.rates ? 'checked' : ''}> Rate decisions (Fed, ECB, Bank of England)</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="checkbox" data-field="ev-earnings" ${ev.earnings ? 'checked' : ''}> Earnings reports ${meta.earningsAvailable === false ? '<span class="badge badge-dim" style="margin-left:4px;">feed not set up</span>' : ''}</label>
+        <div style="display:flex;gap:10px;align-items:center;font-size:13px;flex-wrap:wrap;">Pause from <input class="input" style="width:70px;" type="number" min="0" max="72" step="1" data-field="ev-before" value="${esc(ev.beforeHours)}"> hours before until <input class="input" style="width:70px;" type="number" min="0" max="72" step="1" data-field="ev-after" value="${esc(ev.afterHours)}"> hours after</div>
+        ${upcoming.length ? `<div class="faint" style="font-size:12px;">Coming up for ${esc(d.symbol)}: ${upcoming.map(e => esc(v3EventLabel(e))).join(' · ')}</div>` : cal && cal.events ? `<div class="faint" style="font-size:12px;">No events found for ${esc(d.symbol)} in the next 3 days.</div>` : ''}
+        ${meta.earningsAvailable === false ? `<div class="faint" style="font-size:12px;line-height:1.5;">Earnings dates need a data key on the server (FINNHUB_API_KEY). Until it is set, only rate decisions are applied.</div>` : ''}
+        ${meta.macroListExpired ? `<div style="font-size:12px;color:var(--short);">The rate-decision calendar has run out of dates. Add the new year's dates on the server before relying on this.</div>` : ''}
+      </div>` : ''}
+    </div>
+    <p class="faint" style="font-size:11.5px;line-height:1.5;margin:12px 0 0;">Event pauses use dates only, so a rate-decision day is paused for the whole day. If the event calendar cannot be loaded, the entry goes ahead. Event pauses are not part of backtests.</p>
+  </div>`;
+}
+async function gateSync(s) {
+  // Sends this strategy's filters and event pause to the server, where they are enforced on every new entry.
+  if (!s || !(await backendAvailable())) return;
+  const body = { filterConditions: (s.filterConditions || []).map(c => ({ indicator: c.indicator, operator: c.operator, value: c.value || '' })), eventPause: s.eventPause && s.eventPause.enabled ? s.eventPause : null };
+  try { const r = await v3api('PUT', '/api/gate/' + encodeURIComponent(s.id), body); if (!r.ok) toast((r.data && r.data.error) || 'Could not save the entry filters on the server.', 'err'); } catch (e) { toast('Could not save the entry filters on the server.', 'err'); }
+}
 function renderConditionNode(c, i, total) {
   const ind = indicatorById(c.indicator);
   const logic = c.logic || 'AND';
@@ -11193,7 +11708,8 @@ function renderBacktestPanel(bt, ref) {
       <div class="bt-stat"><div class="l">Sharpe ratio</div><div class="v">${bt.sharpe}</div></div>
     </div>
     <div class="chart-wrap" style="height:170px;"><canvas data-chart data-grid="1" data-dot="1" data-points='${esc(JSON.stringify(bt.curve))}' style="width:100%;height:100%;"></canvas></div>
-    <div class="hint" style="margin-top:10px;">Run on real historical prices, filled at the signal bar's close, with ${bt.costs ? bt.costs.roundTripPct + '% round-trip fees and slippage' : 'no fees or slippage'} taken off each trade.${leverageNote(bt)} Past or hypothetical performance is not indicative of future results.</div>
+    <div class="hint" style="margin-top:10px;">Run on real historical prices, filled at the signal bar's close, with ${bt.costs ? bt.costs.roundTripPct + '% round-trip fees and slippage' + (bt.costs.source === 'default' ? ' (our default for ' + esc(bt.costs.label) + ': ' + bt.costs.feePct + '% fee and ' + bt.costs.slipPct + '% slippage per side)' : bt.costs.source === 'yours' ? ' (your own settings)' : '') : 'no fees or slippage'} taken off each trade.${leverageNote(bt)} Past or hypothetical performance is not indicative of future results.</div>
+    ${renderRobustCard(ref || 'draft', bt)}
     ${v3BacktestExtras(bt, ref)}
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" data-action="rerun-backtest" data-id="${esc(ref || 'draft')}">${icon('play')} Re-run on real data</button></div>
   </div>`;
@@ -11401,7 +11917,8 @@ function goLiveChecks(s, mode, brokerId) {
   const connected = Object.entries(State.user.brokers || {}).filter(([, b]) => b.connected).map(([id]) => id);
   const live = mode === 'live';
   const bk = brokerId ? brokerById(brokerId) : null;
-  if (!connected.length) add('fail', 'Connect a broker', 'Nothing can be deployed until a broker account is connected.', { label: 'Connect a broker', action: 'golive-goto-broker' });
+  if (!connected.length && !live) add('pass', 'No broker needed for practice', 'Practice runs on our servers with live prices and pretend money. No order is sent anywhere.');
+  else if (!connected.length) add('fail', 'Connect a broker', 'Nothing can be deployed until a broker account is connected.', { label: 'Connect a broker', action: 'golive-goto-broker' });
   else add('pass', `Broker connected: ${bk ? bk.name : brokerId}`, live ? 'Orders will be sent to this account.' : 'Demo trades are simulated against this connection.');
   if (live) {
     if (brokerId !== 'alpaca') add('fail', 'Real execution is not available on this broker', 'Only Alpaca has real automated execution today.', { label: 'Deploy to demo instead', action: 'golive-switch-demo' });
@@ -11540,6 +12057,28 @@ function renderModal() {
           <div class="modal-foot">
             <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
             <button type="submit" class="btn btn-primary" id="risk-limits-submit">${icon('check')} Save limits</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  }
+  if (m.type === 'guard') {
+    const g = (State.guardStatus && State.guardStatus.guard) || {};
+    const v = (x, sug) => g.enabled ? (x === null || x === undefined ? '' : x) : sug;
+    return `<div class="modal-overlay" data-action="close-modal">
+      <div class="modal" style="max-width:500px;" data-action="noop">
+        <h3>${icon('shield')} Safety and reliability</h3>
+        <div class="sub">Optional protection that runs on the server. Leave a box empty for no limit.${g.enabled ? '' : ' The values shown are suggested starting points.'}</div>
+        <form data-form="guard">
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600;margin-bottom:14px;"><input type="checkbox" name="enabled" checked> Switch the safety guard on</label>
+          <div class="field"><label>Maximum daily loss (% of account)</label><input class="input" name="maxDailyLossPct" type="number" step="0.1" min="0.1" max="100" value="${esc(v(g.maxDailyLossPct, 3))}" placeholder="e.g. 3"><div class="hint">When the account is down this much today, no new entries until tomorrow.</div></div>
+          <div class="field"><label>Maximum open trades</label><input class="input" name="maxOpenTrades" type="number" step="1" min="1" max="200" value="${esc(v(g.maxOpenTrades, 5))}" placeholder="e.g. 5"><div class="hint">Counts orders still in flight, so two strategies firing together cannot both slip past it.</div></div>
+          <div class="field"><label>Pause after losing trades in a row</label><input class="input" name="maxLosingStreak" type="number" step="1" min="1" max="50" value="${esc(v(g.maxLosingStreak, 3))}" placeholder="e.g. 3"><div class="hint">Pauses all automated entries until you press Resume.</div></div>
+          <div class="v3-warn" style="margin:4px 0 14px;font-size:12.5px;line-height:1.55;">${icon('shield')}<span>Also included when on: unique order IDs and a reconciliation pass after any restart, scheduler monitoring, and a check that your broker and VaticTrader agree on open positions. You are alerted if something is wrong.</span></div>
+          <div id="guard-error" class="form-error" style="display:none;"></div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">${icon('check')} Save</button>
           </div>
         </form>
       </div>
@@ -11768,6 +12307,19 @@ function bindEvents() {
     render(); toast(`${b.name} connected.`, 'ok');
   });
 
+  const guardForm = root.querySelector('form[data-form="guard"]');
+  if (guardForm) guardForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = new FormData(guardForm);
+    const num = (k) => { const v = (f.get(k) || '').toString().trim(); return v === '' ? null : Number(v); };
+    const errEl = document.getElementById('guard-error');
+    try {
+      if (!(await backendAvailable())) throw new Error('The safety guard needs the VaticTrader backend, which is not reachable.');
+      await guardSave({ enabled: !!f.get('enabled'), maxDailyLossPct: num('maxDailyLossPct'), maxOpenTrades: num('maxOpenTrades'), maxLosingStreak: num('maxLosingStreak') });
+      State.modal = null; render(); toast(f.get('enabled') ? 'Safety guard saved and switched on.' : 'Safety guard switched off.', 'ok');
+    } catch (err) { if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; } }
+  });
+
   const riskForm = root.querySelector('form[data-form="risk-limits"]');
   if (riskForm) riskForm.addEventListener('submit', async e => {
     e.preventDefault();
@@ -11929,6 +12481,7 @@ function onDelegatedSubmit(e) {
     if (!desc) { toast('Describe the strategy you want first.', 'err'); return; }
 
     const applyDraft = (draft, matched, usedRealAi) => {
+      State.firstRun = (State.user.strategies || []).length ? null : { step: 'review' };
       State.draft = draft;
       State.editingId = null;
       State.modal = null;
@@ -11946,8 +12499,9 @@ function onDelegatedSubmit(e) {
 
     if (!State.aiAvailable) { fallbackToKeywords(); return; }
 
-    const errEl = document.getElementById('ai-generate-error');
-    const submitBtn = document.getElementById('ai-generate-submit');
+    const errEl = aiForm.querySelector('#ai-generate-error, [data-ai-err]');
+    const submitBtn = aiForm.querySelector('#ai-generate-submit, [data-ai-submit]');
+    const origLabel = submitBtn ? submitBtn.innerHTML : '';
     if (errEl) errEl.style.display = 'none';
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Thinking…'; }
 
@@ -11957,7 +12511,7 @@ function onDelegatedSubmit(e) {
     }).then(async res => {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 429) { if (errEl) { errEl.textContent = data.error || 'AI limit reached for this hour.'; errEl.style.display = 'block'; } if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = `${icon('code')} Generate`; } return; }
+        if (res.status === 429) { if (errEl) { errEl.textContent = data.error || 'AI limit reached for this hour.'; errEl.style.display = 'block'; } if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = origLabel; } return; }
         fallbackToKeywords(); // AI unavailable or errored, fall back rather than block the user
         return;
       }
@@ -11975,7 +12529,7 @@ function onDelegatedSubmit(e) {
       d.timeframe = ai.timeframe || '1H';
       if (typeof ai.takeProfit === 'number' && ai.takeProfit > 0) d.takeProfit = ai.takeProfit;
       if (typeof ai.stopLoss === 'number' && ai.stopLoss > 0) d.stopLoss = ai.stopLoss;
-      d.name = desc.slice(0, 48).replace(/\s+/g, ' ') || 'Generated strategy';
+      d.name = strategyNameFromText(desc);
       const matched = Array.isArray(ai.matchedSummary) && ai.matchedSummary.length ? ai.matchedSummary : ['Translated by AI, review the fields below.'];
       applyDraft(d, matched, true);
     }).catch(() => { fallbackToKeywords(); });
@@ -12001,6 +12555,15 @@ function onDelegatedClick(e) {
     case 'sc-ask': sendStrategyChat(State.detailId, el.getAttribute('data-q')); break;
     case 'sc-refresh': loadStrategyIndicators(el.getAttribute('data-id'), true); break;
     case 'lc-bars': State.lcBars = parseInt(el.getAttribute('data-n'), 10) || 120; updateLiveChartUI(el.getAttribute('data-id')); break;
+    case 'open-guard': State.modal = { type: 'guard' }; render(); break;
+    case 'guard-resume': {
+      (async () => {
+        const g = (State.guardStatus && State.guardStatus.guard) || {};
+        try { await guardSave({ enabled: true, maxDailyLossPct: g.maxDailyLossPct, maxOpenTrades: g.maxOpenTrades, maxLosingStreak: g.maxLosingStreak, resume: true }, 'Entries resumed. The limits stay on and can pause trading again.'); }
+        catch (err) { toast(err.message, 'err'); }
+      })();
+      break;
+    }
     case 'open-risk-limits': State.modal = { type: 'risk-limits' }; render(); break;
     case 'risk-resume': {
       (async () => {
@@ -12145,6 +12708,7 @@ function onDelegatedClick(e) {
         takeProfit: tpl.takeProfit, stopLoss: tpl.stopLoss, positionSizePct: tpl.positionSizePct, trailingStop: tpl.trailingStop, trailingStopPct: tpl.trailingStopPct || 0,
       });
       d.copiedFromId = 'template:' + tpl.name;
+      State.firstRun = (State.user.strategies || []).length ? null : { step: 'review' };
       State.draft = d; State.editingId = null; State.view = 'builder';
       render(); toast('Template loaded, tweak it, then save.', 'ok');
       break;
@@ -12282,7 +12846,7 @@ function onDelegatedClick(e) {
     case 'toggle-sidebar': State.sidebarOpen = !State.sidebarOpen; render(); break;
     case 'logout': handleLogout(); break;
 
-    case 'new-strategy': State.draft = blankDraft(); State.editingId = null; State.aiGenSummary = null; State.aiGenUsedRealAi = false; State.view = 'builder'; render(); break;
+    case 'new-strategy': State.firstRun = null; State.draft = blankDraft(); State.editingId = null; State.aiGenSummary = null; State.aiGenUsedRealAi = false; State.view = 'builder'; render(); break;
     case 'dismiss-ai-summary': State.aiGenSummary = null; State.aiGenUsedRealAi = false; render(); break;
     case 'run-montecarlo': {
       const id = el.getAttribute('data-id');
@@ -12311,6 +12875,8 @@ function onDelegatedClick(e) {
     case 'pb-csv': { const c = pbCsv(); if (c) { try { navigator.clipboard.writeText(c); toast('Allocation copied as CSV.', 'ok'); } catch (e) { toast('Could not copy. Select the table instead.', 'err'); } } break; }
     case 'tb-stop': tuneBatchState().cancel = true; break;
     case 'tune-run': tuneStart(el.getAttribute('data-tkey')); break;
+    case 'tune-wf': tuneWfStart(el.getAttribute('data-tkey')); break;
+    case 'tb-wf': tuneBatchWf(); break;
     case 'tune-stop': tuneState(el.getAttribute('data-tkey')).cancel = true; break;
     case 'tune-apply': tuneApply(el.getAttribute('data-tkey'), parseInt(el.getAttribute('data-idx'), 10) || 0); break;
     case 'set-optimize-goal': State.optimizeGoal = el.getAttribute('data-goal'); render(); break;
@@ -12428,6 +12994,8 @@ function onDelegatedClick(e) {
       render();
       break;
     }
+    case 'add-filter': { ensureDraft(); gateEnsure(State.draft); if (State.draft.filterConditions.length < 5) State.draft.filterConditions.push({ id: uid(), indicator: 'pricevssma', operator: 'is above', value: '' }); render(); break; }
+    case 'remove-filter': { ensureDraft(); gateEnsure(State.draft); State.draft.filterConditions = State.draft.filterConditions.filter(c => c.id !== el.getAttribute('data-id')); render(); break; }
     case 'add-condition': ensureDraft(); State.draft.entryConditions.push({ id: uid(), indicator: 'rsi', operator: 'is below', value: '30', logic: 'AND' }); render(); break;
     case 'remove-condition': ensureDraft(); State.draft.entryConditions = State.draft.entryConditions.filter(c => c.id !== el.getAttribute('data-id')); render(); break;
     case 'run-backtest': {
@@ -12471,6 +13039,9 @@ function onDelegatedClick(e) {
 
     case 'open-connect-modal': if (!(brokerById(el.getAttribute('data-id')) || {}).real) { toast('This broker has no real connection yet.', 'info'); break; } State.modal = { type: 'connect-broker', id: el.getAttribute('data-id') }; pendingBrokerMode = 'demo'; render(); break;
     case 'open-ai-generate': State.modal = { type: 'ai-generate' }; render(); break;
+    case 'quick-bt': frQuickBacktest(); break;
+    case 'fr-dismiss': State.firstRun = null; render(); break;
+    case 'fr-example': { const ex = frExamples()[parseInt(el.getAttribute('data-i'), 10)]; const ta = el.closest('form') && el.closest('form').querySelector('textarea[name="description"]'); if (ta && ex) { ta.value = ex[1]; ta.focus(); } break; }
     case 'set-broker-mode': {
       pendingBrokerMode = el.getAttribute('data-val');
       el.parentElement.querySelectorAll('button').forEach(b => b.className = '');
@@ -12730,16 +13301,17 @@ async function deployStrategyToBroker(s, mode, brokerId) {
     } catch (e) { /* demo still deploys, it just records nothing */ }
     if (simStarted) pfLoadSimTrades(true);
   }
+  gateSync(s);
   s.status = mode; s.brokerId = brokerId;
   logActivity(mode === 'live' ? 'deploy' : 'strategy', `${mode === 'live' ? 'Went live with' : 'Deployed to demo:'} "${s.name}" on ${b ? b.name : 'broker'}`);
   saveUser(); render();
   toast(mode === 'live'
     ? `"${s.name}" is now live-monitored via ${b.name}, real market data, will place a real (paper) order the moment your conditions genuinely fire.`
-    : simStarted ? `"${s.name}" is now forward-testing on live prices with simulated fills. No order is sent to any broker. Trades appear on Portfolio.` : `"${s.name}" is now in demo mode (no orders sent) via ${b ? b.name : 'your broker'}.`, 'ok');
+    : simStarted ? `"${s.name}" is now forward-testing on live prices with simulated fills. No order is sent to any broker. Trades appear on Portfolio.` : `"${s.name}" is now in demo mode (no orders sent)${b ? ' via ' + b.name : ''}.`, 'ok');
   checkAchievements();
 }
 
-const DRAFT_INPUT_FIELDS = ['name', 'takeProfit', 'stopLoss', 'positionSizePct', 'trailingStopPct', 'cond-value'];
+const DRAFT_INPUT_FIELDS = ['name', 'takeProfit', 'stopLoss', 'positionSizePct', 'trailingStopPct', 'cond-value', 'flt-value', 'ev-before', 'ev-after'];
 function onDelegatedInput(e) {
   const t = e.target;
   const field = t.getAttribute('data-field');
@@ -12758,6 +13330,9 @@ function onDelegatedInput(e) {
   else if (field === 'stopLoss') d.stopLoss = parseFloat(t.value) || 0;
   else if (field === 'positionSizePct') d.positionSizePct = parseFloat(t.value) || 0;
   else if (field === 'trailingStopPct') { const p = parseFloat(t.value); d.trailingStopPct = p > 0 ? Math.min(50, p) : 0; d.trailingStop = d.trailingStopPct > 0; }
+  else if (field === 'flt-value') { gateEnsure(d); const c = d.filterConditions.find(c => c.id === t.getAttribute('data-id')); if (c) c.value = t.value; }
+  else if (field === 'ev-before') { gateEnsure(d); d.eventPause.beforeHours = Math.min(72, Math.max(0, parseFloat(t.value) || 0)); }
+  else if (field === 'ev-after') { gateEnsure(d); d.eventPause.afterHours = Math.min(72, Math.max(0, parseFloat(t.value) || 0)); }
   else if (field === 'cond-value') { const c = d.entryConditions.find(c => c.id === t.getAttribute('data-id')); if (c) c.value = t.value; }
   else return;
   // live-update summary panel only (avoid full re-render stealing focus)
@@ -12780,6 +13355,11 @@ function onDelegatedChange(e) {
   if (field === 'timeframe') { ensureDraft(); State.draft.timeframe = t.value; updateSummaryOnly(); return; }
   if (field === 'trailingStop') { ensureDraft(); State.draft.trailingStop = t.checked; return; }
   if (field === 'leverage') { ensureDraft(); State.draft.leverage = Math.min(5, Math.max(1, parseInt(t.value, 10) || 1)); render(); return; }
+  if (field === 'flt-indicator') { ensureDraft(); gateEnsure(State.draft); const c = State.draft.filterConditions.find(c => c.id === t.getAttribute('data-id')); if (c) { c.indicator = t.value; const ind = indicatorById(t.value); c.operator = ind.ops[0]; c.value = ''; } render(); return; }
+  if (field === 'flt-operator') { ensureDraft(); gateEnsure(State.draft); const c = State.draft.filterConditions.find(c => c.id === t.getAttribute('data-id')); if (c) c.operator = t.value; return; }
+  if (field === 'ev-enabled') { ensureDraft(); gateEnsure(State.draft); State.draft.eventPause.enabled = t.checked; render(); return; }
+  if (field === 'ev-rates') { ensureDraft(); gateEnsure(State.draft); State.draft.eventPause.rates = t.checked; return; }
+  if (field === 'ev-earnings') { ensureDraft(); gateEnsure(State.draft); State.draft.eventPause.earnings = t.checked; return; }
   if (field === 'cond-indicator') {
     ensureDraft();
     const c = State.draft.entryConditions.find(c => c.id === t.getAttribute('data-id'));
@@ -13571,7 +14151,7 @@ function v3TemplatePlain(t) {
 /* ------------------------------ backtest honesty panels ------------------------------ */
 function v3BacktestExtras(bt, ref) {
   const rows = [];
-  if (bt.costs) rows.push(`<div class="v3-bt-line"><span>${T3('Costs taken off', 'التكاليف المخصومة')}</span><b>${bt.costs.roundTripPct}% ${T3('per round trip', 'لكل صفقة كاملة')}</b><span class="faint">${T3('return before costs', 'العائد قبل التكاليف')} ${fmtPct(bt.grossReturn)}</span></div>`);
+  if (bt.costs) rows.push(`<div class="v3-bt-line"><span>${T3('Costs taken off', 'التكاليف المخصومة')}</span><b>${bt.costs.roundTripPct}% ${T3('per round trip', 'لكل صفقة كاملة')}</b><span class="faint">${bt.costs.source === 'default' ? T3('default for ' + esc(bt.costs.label) + ', a typical retail estimate', 'افتراضي لـ ' + esc(bt.costs.label)) + ' · ' : bt.costs.source === 'yours' ? T3('your settings', 'إعداداتك') + ' · ' : ''}${T3('return before costs', 'العائد قبل التكاليف')} ${fmtPct(bt.grossReturn)}</span></div>`);
   if (bt.oos && (bt.oos.inSample.trades || bt.oos.outSample.trades)) {
     const f = (x) => x.trades ? `${x.trades} ${T3('trades', 'صفقة')}, ${x.winRate}% ${T3('wins', 'رابحة')}, ${fmtPct(x.returnPct)}` : T3('no trades', 'لا صفقات');
     rows.push(`<div class="v3-bt-line"><span>${T3('Earlier 70% of history', 'أول 70% من التاريخ')}</span><b>${f(bt.oos.inSample)}</b></div><div class="v3-bt-line"><span>${T3('Most recent 30%', 'أحدث 30%')}</span><b>${f(bt.oos.outSample)}</b></div>`);
@@ -13581,14 +14161,14 @@ function v3BacktestExtras(bt, ref) {
 }
 function v3BacktestHonesty(s, bt) {
   if (!bt) return '';
-  const c = backtestCosts();
+  const c = backtestCosts(s.symbol);
   return `<div class="panel panel-pad" style="margin-bottom:16px;">
     <div class="panel-head"><h3>${icon('shield')} ${T3('How honest is this backtest?', 'ما مدى صدق هذا الاختبار؟')}</h3><span class="badge badge-dim">${T3('Costs, recent-period check, warnings', 'التكاليف، فحص الفترة الحديثة، التحذيرات')}</span></div>
     ${v3BacktestExtras(bt, s.id) || `<p class="muted" style="font-size:13px;margin:0;">${T3('Re-run the backtest to see costs and the recent-period check.', 'أعد تشغيل الاختبار لعرض التكاليف وفحص الفترة الحديثة.')}</p>`}
     <div class="v3-costs">
       <label>${T3('Fee per side %', 'الرسوم لكل جانب %')}<input class="input" type="number" min="0" max="5" step="0.01" id="v3-fee" value="${c.feePct}"></label>
       <label>${T3('Slippage per side %', 'الانزلاق لكل جانب %')}<input class="input" type="number" min="0" max="5" step="0.01" id="v3-slip" value="${c.slipPct}"></label>
-      <button class="btn btn-primary btn-sm" data-action="v3-save-costs" data-id="${esc(s.id)}">${icon('play')} ${T3('Apply and re-run', 'تطبيق وإعادة التشغيل')}</button>
+      <button class="btn btn-primary btn-sm" data-action="v3-save-costs" data-id="${esc(s.id)}">${icon('play')} ${T3('Apply and re-run', 'تطبيق وإعادة التشغيل')}</button>${c.source === 'yours' ? `<button class="btn btn-ghost btn-sm" data-action="v3-reset-costs" data-id="${esc(s.id)}">${T3('Use typical costs', 'استخدم التكاليف المعتادة')}</button>` : ''}
     </div>
     <div class="hint" style="margin-top:10px;">${T3('Stock trades are often commission free, but spreads and slippage are real. Forex and crypto usually cost more. These numbers apply to all your backtests.', 'تداول الأسهم غالبًا بلا عمولة، لكن فروق الأسعار والانزلاق حقيقية. الفوركس والعملات المشفرة أغلى عادة. تُطبَّق هذه الأرقام على جميع اختباراتك.')}</div>
   </div>`;
@@ -14238,10 +14818,10 @@ function v3Steps(ctx) {
   const rs = State.riskStatus; const limitsOn = !!(rs && rs.limits && rs.limits.enabled && (rs.limits.maxDailyLossPct || rs.limits.maxCapitalPerStrategyUsd || rs.limits.maxOpenPositions || rs.limits.maxDeployedPct));
   const n = V3.settings && V3.settings.notify; const notifyOn = !!(n && (n.emailEnabled || n.telegramLinked));
   return [
-    { key: 'broker', done: ctx.doneSteps.broker, label: T3('Connect a broker account', 'اربط حساب وسيط'), why: T3('Start with an Alpaca paper account. It uses fake money and real prices.', 'ابدأ بحساب Alpaca ورقي. يستخدم مالًا وهميًا وأسعارًا حقيقية.'), cta: T3('Connect broker', 'ربط وسيط'), a: 'nav', attrs: 'data-view="broker"' },
-    { key: 'strategy', done: ctx.doneSteps.strategy, label: T3('Build or copy a strategy', 'أنشئ أو انسخ استراتيجية'), why: T3('Pick an example strategy if you are not sure where to start.', 'اختر استراتيجية جاهزة إن لم تكن متأكدًا من البداية.'), cta: T3('See examples', 'عرض الأمثلة'), a: 'nav', attrs: 'data-view="templates"' },
+    { key: 'strategy', done: ctx.doneSteps.strategy, label: T3('Describe a strategy in plain English', 'صف استراتيجية بلغة بسيطة'), why: T3('One sentence is enough. Or copy one of the starter picks.', 'جملة واحدة تكفي. أو انسخ إحدى الاستراتيجيات المختارة.'), cta: T3('Describe a strategy', 'صف استراتيجية'), a: 'open-ai-generate', attrs: '' },
     { key: 'realbt', done: strategies.some(s => s.backtest && s.backtest.dataSource && s.backtest.dataSource !== 'simulated'), label: T3('Backtest on real market data', 'اختبر على بيانات سوق حقيقية'), why: T3('Simulated prices flatter a strategy. Real history, with fees, is the honest test.', 'الأسعار المحاكاة تجمّل الاستراتيجية. التاريخ الحقيقي مع الرسوم هو الاختبار الصادق.'), cta: T3('Open strategies', 'فتح الاستراتيجيات'), a: 'nav', attrs: 'data-view="strategies"' },
     { key: 'paper', done: strategies.some(s => s.status === 'demo' || s.status === 'live'), label: T3('Run it on demo or paper', 'شغّلها على التجريبي أو الورقي'), why: T3('Watch it for a few days before any real money is involved.', 'راقبها بضعة أيام قبل أن يدخل أي مال حقيقي.'), cta: T3('Open strategies', 'فتح الاستراتيجيات'), a: 'nav', attrs: 'data-view="strategies"' },
+    { key: 'broker', done: ctx.doneSteps.broker, label: T3('Connect a broker account (needed for live trading)', 'اربط حساب وسيط (مطلوب للتداول الحقيقي)'), why: T3('Practice mode does not need one. For live trading, start with an Alpaca paper account: fake money, real prices.', 'وضع التجربة لا يحتاج وسيطًا. للتداول الحقيقي ابدأ بحساب Alpaca ورقي: مال وهمي وأسعار حقيقية.'), cta: T3('Connect broker', 'ربط وسيط'), a: 'nav', attrs: 'data-view="broker"' },
     { key: 'limits', done: limitsOn, label: T3('Set risk limits', 'حدد حدود المخاطر'), why: T3('A daily loss limit protects you while you are asleep.', 'حد الخسارة اليومي يحميك وأنت نائم.'), cta: T3('Set limits', 'تحديد الحدود'), a: 'open-risk-limits', attrs: '' },
     { key: 'notify', done: notifyOn, label: T3('Turn on email or Telegram alerts', 'فعّل تنبيهات البريد أو تيليجرام'), why: T3('Hear about every fill and every problem without watching the screen.', 'اعرف بكل تنفيذ وكل مشكلة دون مراقبة الشاشة.'), cta: T3('Set up alerts', 'إعداد التنبيهات'), a: 'v3-open-settings', attrs: 'data-tab="notifications"' },
     { key: 'live', done: strategies.some(s => s.status === 'live'), label: T3('Go live, when you are ready', 'ابدأ الحقيقي عندما تكون جاهزًا'), why: T3('Optional, and never rushed. You will be asked to confirm.', 'اختياري وبلا استعجال. سيُطلب منك التأكيد.'), cta: T3('Open strategies', 'فتح الاستراتيجيات'), a: 'nav', attrs: 'data-view="strategies"' },
@@ -14322,11 +14902,22 @@ function v3Click(action, el) {
     case 'pf-trade-filter': V3.pfFilter = A('data-f'); V3.pfLimit = 100; render(); return true;
     case 'pf-trades-more': V3.pfLimit = (V3.pfLimit || 100) + 200; render(); return true;
     case 'pf-trades-csv': pfTradesCsv(); return true;
+    case 'sim-toggle': { const k = A('data-id') === 'all' ? 'all' : 'one'; simSetCollapsed(k, !simIsCollapsed(k)); render(); return true; }
+    case 'sim-close-trade': { const sid = A('data-id'); State.modal = { type: 'confirm', title: 'Close this practice trade?', body: 'This closes the simulated trade at the latest price. No real order is involved. The strategy keeps running and waits for its next signal.', confirmLabel: 'Close trade', onConfirm: () => simCloseTrade(sid) }; render(); return true; }
+    case 'sim-clear': { const sid = A('data-id'); State.modal = { type: 'confirm', title: 'Clear practice history?', body: sid === 'all' ? 'This permanently deletes all your closed simulated trades. Open trades are kept. Your real trades are not touched.' : 'This permanently deletes this strategy\u2019s closed simulated trades. An open trade is kept.', confirmLabel: 'Clear history', onConfirm: () => simClearHistory(sid) }; render(); return true; }
+    case 'sim-stop-all': { const n = (State.user.strategies || []).filter(x => x.status === 'demo').length; State.modal = { type: 'confirm', title: `Stop all ${n} demo strateg${n === 1 ? 'y' : 'ies'}?`, body: 'Each demo strategy stops watching prices, its open practice trade is closed at the latest price, and it returns to draft. Your history stays.', confirmLabel: 'Stop all', onConfirm: () => simStopAll() }; render(); return true; }
     case 'sim-trades-more': V3.simLimit = (V3.simLimit || 50) + 200; render(); return true;
     case 'v3-journal-for': V3.journalStrategy = A('data-id'); V3.journalFilter = 'all'; V3.jrTab = 'trades'; V3.jrPage = 1; State.view = 'journal'; render(); window.scrollTo(0, 0); return true;
     case 'v3-export-csv': v3ExportCsv(A('data-year') || V3.year); return true;
     case 'v3-statement': v3Statement(A('data-year') || V3.year); return true;
     /* backtest costs */
+    case 'v3-reset-costs': {
+      delete State.user.btCosts;
+      const x = State.user.strategies.find(y => y.id === A('data-id')); if (!x) { saveUser(); render(); return true; }
+      toast(T3('Back to default costs. Re-running…', 'عودة للتكاليف الافتراضية…'), 'info');
+      loadRealBars(x.symbol, x.timeframe, true).then(() => { applyBacktest(x, x.id); saveUser(); render(); });
+      return true;
+    }
     case 'v3-save-costs': {
       const fee = parseFloat((document.getElementById('v3-fee') || {}).value), slip = parseFloat((document.getElementById('v3-slip') || {}).value);
       if (!(fee >= 0 && fee <= 5 && slip >= 0 && slip <= 5)) { toast(T3('Enter costs between 0 and 5 percent.', 'أدخل تكاليف بين 0 و5 بالمئة.'), 'err'); return true; }
@@ -14459,7 +15050,7 @@ V3.replay = {}; V3.cal = null; V3.calFor = {}; V3.index = null; V3.commTab = 'br
 
 /* ------------------------------ what-if replay ------------------------------ */
 function v3ReplayPayload(s) {
-  const c = backtestCosts();
+  const c = backtestCosts(s.symbol);
   return { symbol: s.symbol, timeframe: s.timeframe, direction: s.direction === 'short' ? 'short' : 'long',
     entryConditions: (s.entryConditions || []).map(x => ({ indicator: x.indicator, operator: x.operator, value: x.value || '', logic: x.logic === 'OR' ? 'OR' : 'AND', language: x.language })),
     takeProfit: s.takeProfit, stopLoss: s.stopLoss, positionSizePct: s.positionSizePct, costPct: Math.round(2 * (c.feePct + c.slipPct) * 1000) / 1000, days: 30 };
@@ -14550,6 +15141,7 @@ async function v3LoadCalFor(symbol) {
   V3.calFor[symbol] = { loading: true };
   const r = await v3api('GET', '/api/calendar?days=3&symbols=' + encodeURIComponent(symbol));
   V3.calFor[symbol] = r.ok ? { events: r.data.events } : { events: [] };
+  if (r.ok) V3.calMeta = { earningsAvailable: r.data.earningsAvailable, macroListExpired: r.data.macroListExpired };
   if (State.modal && State.modal.type === 'golive') render();
 }
 function v3CalBannerInto(add) {
@@ -14923,7 +15515,12 @@ function v5Input(t, field) {
   if (field === 'jr-search') { V3.jrQ = v; V3.jrPage = 1; render(); const e = document.querySelector('[data-field="jr-search"]'); if (e) { e.focus(); try { e.setSelectionRange(v.length, v.length); } catch (x) {} } return true; }
   if (field === 'scr-search') { State.screenQ = v; const r = document.getElementById('scr-results'); if (r) r.innerHTML = screenResultsInner(); return true; }
   if (field === 'scr-custom') { screenCfg().custom = v; return true; }
-  if (field === 'tpl-search') { State.tplQuery = v; State.tplLimit = TPL_PAGE; const r = document.getElementById('tpl-results'); if (r) r.innerHTML = renderTemplateResults(); return true; }
+  if (field === 'tpl-search') {
+    const wasStarter = !!document.getElementById('tpl-starter-mode');
+    State.tplQuery = v; State.tplLimit = TPL_PAGE;
+    if (wasStarter !== !tplIsFiltering()) { const pos = t.selectionStart; render(); const n = document.querySelector('[data-field="tpl-search"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} } return true; }
+    const r = document.getElementById('tpl-results'); if (r) r.innerHTML = renderTemplateResults(); return true;
+  }
   return true;
 }
 function v5Change(t, field) {
@@ -14932,6 +15529,8 @@ function v5Change(t, field) {
 }
 function v5Click(action, el) {
   switch (action) {
+    case 'tpl-browse-all': State.tplShowAll = true; State.tplLimit = TPL_PAGE; window.scrollTo(0, 0); render(); return true;
+    case 'tpl-starters': State.tplShowAll = false; State.tplQuery = ''; State.tplMarket = 'All'; State.tplFamily = 'All'; State.tplDir = 'All'; State.tplLimit = TPL_PAGE; window.scrollTo(0, 0); render(); return true;
     case 'tpl-market': State.tplMarket = el.getAttribute('data-val') || 'All'; State.tplLimit = TPL_PAGE; render(); return true;
     case 'tpl-dir': State.tplDir = el.getAttribute('data-val') || 'All'; State.tplLimit = TPL_PAGE; render(); return true;
     case 'tpl-family': State.tplFamily = el.getAttribute('data-val') || 'All'; State.tplLimit = TPL_PAGE; render(); return true;

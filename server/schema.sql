@@ -395,3 +395,43 @@ CREATE TABLE IF NOT EXISTS usage_daily_users (
 
 -- Fast mode: when true, the deployment is also driven by a streaming price feed (the user's own Alpaca data connection).
 ALTER TABLE live_deployments ADD COLUMN IF NOT EXISTS fast_mode BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ---------------------------------------------------------------------------
+-- Server safety guard (opt-in): hard limits, safe orders (client_order_id + reconciliation), monitoring events
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS safety_guard (
+  username           TEXT PRIMARY KEY REFERENCES users(username) ON DELETE CASCADE,
+  enabled            BOOLEAN NOT NULL DEFAULT FALSE,
+  max_daily_loss_pct NUMERIC,
+  max_open_trades    INTEGER,
+  max_losing_streak  INTEGER,
+  streak_since       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  streak_halted      BOOLEAN NOT NULL DEFAULT FALSE,
+  streak_reason      TEXT,
+  halted_on          TEXT,
+  halted_reason      TEXT,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE live_deployments ADD COLUMN IF NOT EXISTS entering_coid  TEXT;
+ALTER TABLE live_deployments ADD COLUMN IF NOT EXISTS entering_at    TIMESTAMPTZ;
+ALTER TABLE live_deployments ADD COLUMN IF NOT EXISTS entering_qty   NUMERIC;
+ALTER TABLE live_deployments ADD COLUMN IF NOT EXISTS entering_price NUMERIC;
+CREATE TABLE IF NOT EXISTS guard_events (
+  id         BIGSERIAL PRIMARY KEY,
+  username   TEXT,
+  kind       TEXT NOT NULL,
+  severity   TEXT NOT NULL DEFAULT 'info',
+  detail     TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_guard_events_user ON guard_events(username, id DESC);
+
+-- Entry gate (opt-in per strategy): "Only trade if..." filters and "Pause around big events".
+CREATE TABLE IF NOT EXISTS strategy_gates (
+  username          TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  strategy_id       TEXT NOT NULL,
+  filter_conditions JSONB,
+  event_pause       JSONB,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (username, strategy_id)
+);

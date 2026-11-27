@@ -1423,6 +1423,342 @@ async function rearmOrPause(client, dep) {
   }
   await client.query(`UPDATE live_deployments SET status='watching', needs_reset=true, closed_at=now(), entry_order_id=NULL, entry_price=NULL, qty=NULL, opened_at=NULL WHERE id=$1`, [dep.id]);
 }
+// ---------------------------------------------------------------------------
+// SERVER SAFETY GUARD (opt-in per user: Settings > Server safety guard)
+//  1. Hard limits enforced on the server at the moment an order is claimed: daily loss cap, max open trades
+//     (counting orders still in flight), and an account-wide losing-streak pause. Checked under a per-user
+//     database lock, so two strategies firing together cannot both slip past the cap.
+//  2. Safe orders: every entry first claims the deployment in the database and carries a client_order_id.
+//     If the server dies or the network drops mid-order, a reconciliation pass looks the order up at the broker
+//     by that id and adopts it (or clears it if it never arrived), so a restart can never double-trade.
+//  3. Monitoring: scheduler heartbeat, order-failure tracking, and broker vs database position checks, with
+//     alerts to the user (and to the operator via OPS_ALERT_EMAIL / OPS_TELEGRAM_CHAT) and a /api/health/scheduler probe.
+// Limits only restrict NEW entries. They never close positions; each position's own stop-loss still applies.
+// ---------------------------------------------------------------------------
+const GUARD_INTERVAL_MS = parseInt(process.env.GUARD_INTERVAL_MS, 10) || 60000;
+const GUARD_PENDING_MIN_AGE_MS = parseInt(process.env.GUARD_PENDING_MIN_AGE_MS, 10) || 20000;   // give an in-flight order time to finish before reconciling it
+const GUARD_PENDING_CLEAR_MS = parseInt(process.env.GUARD_PENDING_CLEAR_MS, 10) || 120000;     // broker has no record of the order after this long: it never arrived
+const SCHEDULER_STALE_MS = parseInt(process.env.SCHEDULER_STALE_MS, 10) || Math.max(3 * LIVE_TICK_INTERVAL_MS, 180000);
+const OPS_ALERT_EMAIL = process.env.OPS_ALERT_EMAIL || null;
+const OPS_TELEGRAM_CHAT = process.env.OPS_TELEGRAM_CHAT || null;
+const schedulerHealth = { startedAt: Date.now(), lastTickStart: 0, lastTickEnd: Date.now(), lastTickMs: 0, lastTickError: null, ticks: 0 };
+const guardSeen = new Map();      // alert dedupe: key -> last sent ms
+const guardStreaks = new Map();   // persistence counter for mismatch findings
+function guardOnce(key, cooldownMs) { const now = Date.now(), t = guardSeen.get(key); if (t && now - t < cooldownMs) return false; guardSeen.set(key, now); return true; }
+async function guardLog(username, kind, severity, detail) {
+  try { await pool.query('INSERT INTO guard_events (username, kind, severity, detail) VALUES ($1,$2,$3,$4)', [username || null, kind, severity, String(detail).slice(0, 600)]); } catch (e) { /* best effort */ }
+}
+async function opsAlert(key, title, body) {
+  if (!guardOnce('ops:' + key, 30 * 60000)) return;
+  console.error('OPS ALERT:', title, '-', body);
+  const text = `${title}\n\n${body}`;
+  if (OPS_ALERT_EMAIL) sendEmail(OPS_ALERT_EMAIL, `[VaticTrader ops] ${title}`, text).catch(() => {});
+  if (OPS_TELEGRAM_CHAT) sendTelegram(OPS_TELEGRAM_CHAT, `VaticTrader ops: ${text}`).catch(() => {});
+}
+async function guardRow(client, username) {
+  const r = await client.query('SELECT * FROM safety_guard WHERE username=$1 AND enabled=true', [username]);
+  return r.rows[0] || null;
+}
+// Daily-loss and losing-streak checks. Persists a halt so it holds across restarts. Returns { reason } when entries must be refused.
+async function guardEvaluate(client, username, g, acct) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (g.halted_on === today && g.halted_reason) return { reason: g.halted_reason };
+  if (g.streak_halted) return { reason: g.streak_reason || 'Safety guard: paused after a losing streak. Resume it from Settings.' };
+  if (g.max_daily_loss_pct && acct) {
+    const eq = parseFloat(acct.equity) || 0, last = parseFloat(acct.lastEquity) || 0, lim = parseFloat(g.max_daily_loss_pct);
+    if (last > 0) {
+      const pct = ((eq - last) / last) * 100;
+      if (pct <= -lim) {
+        const reason = `Safety guard: account is ${pct.toFixed(2)}% today, past your -${lim}% daily loss cap. No new entries until tomorrow.`;
+        await client.query('UPDATE safety_guard SET halted_on=$1, halted_reason=$2 WHERE username=$3', [today, reason, username]);
+        g.halted_on = today; g.halted_reason = reason;
+        notifyUser(username, 'risk', 'Safety guard: daily loss cap reached', reason, 'dashboard');
+        guardLog(username, 'daily_loss_halt', 'warn', reason);
+        return { reason };
+      }
+    }
+  }
+  if (g.max_losing_streak) {
+    const n = parseInt(g.max_losing_streak, 10);
+    const r = await client.query(`SELECT side, entry_price, exit_price FROM live_trade_log WHERE username=$1 AND status='closed' AND exit_price IS NOT NULL AND closed_at >= $2 ORDER BY closed_at DESC, id DESC LIMIT $3`, [username, g.streak_since, n]);
+    const allLoss = r.rows.length === n && r.rows.every(t => { const e = parseFloat(t.entry_price), x = parseFloat(t.exit_price); return (t.side === 'buy' ? x - e : e - x) < 0; });
+    if (allLoss) {
+      const reason = `Safety guard: ${n} losing trade${n === 1 ? '' : 's'} in a row across your strategies. New entries are paused until you resume.`;
+      await client.query('UPDATE safety_guard SET streak_halted=true, streak_reason=$1 WHERE username=$2', [reason, username]);
+      await client.query(`UPDATE live_deployments SET status='paused', pause_reason=$2, needs_reset=false WHERE username=$1 AND status='watching'`, [username, reason]);
+      g.streak_halted = true; g.streak_reason = reason;
+      notifyUser(username, 'risk', 'Safety guard: losing-streak pause', reason + ' Open positions keep their own stop-loss. Review, then resume from Settings.', 'dashboard');
+      guardLog(username, 'streak_halt', 'warn', reason);
+      return { reason };
+    }
+  }
+  return { reason: null };
+}
+// Atomically checks the hard limits and claims the deployment for one order. Returns { ok, coid } or { ok:false, reason }.
+async function guardClaimEntry(client, dep, acct, qty, entryPrice) {
+  const g0 = await guardRow(client, dep.username);
+  if (!g0) return { ok: true, coid: null };
+  await client.query('BEGIN');
+  try {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['vtguard:' + dep.username]);
+    const g = (await client.query('SELECT * FROM safety_guard WHERE username=$1 FOR UPDATE', [dep.username])).rows[0];
+    const ev = await guardEvaluate(client, dep.username, g, acct);
+    if (ev.reason) { await client.query('COMMIT'); return { ok: false, reason: ev.reason }; }
+    if (g.max_open_trades) {
+      const c = await client.query(`SELECT COUNT(*)::int AS n FROM live_deployments WHERE username=$1 AND (status='open' OR entering_coid IS NOT NULL)`, [dep.username]);
+      if (c.rows[0].n >= g.max_open_trades) { await client.query('COMMIT'); return { ok: false, reason: `Safety guard: ${c.rows[0].n} trades already open or pending (your cap is ${g.max_open_trades}).` }; }
+    }
+    const coid = ('vt-' + dep.id + '-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex')).slice(0, 48);
+    const u = await client.query(`UPDATE live_deployments SET entering_coid=$1, entering_at=now(), entering_qty=$2, entering_price=$3 WHERE id=$4 AND status='watching' AND entering_coid IS NULL`, [coid, qty, entryPrice, dep.id]);
+    await client.query('COMMIT');
+    if (!u.rowCount) return { ok: false, silent: true, reason: 'An order for this strategy is already in flight.' };
+    return { ok: true, coid };
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; }
+}
+async function guardRecordOrderFailure(dep, detail) {
+  await guardLog(dep.username, 'order_failed', 'error', `${dep.strategy_name || dep.symbol}: ${detail}`);
+  try {
+    const n = (await pool.query(`SELECT COUNT(*)::int AS n FROM guard_events WHERE username=$1 AND kind='order_failed' AND created_at > now() - interval '15 minutes'`, [dep.username])).rows[0].n;
+    if (n >= 3) {
+      opsAlert('orders:' + dep.username, 'Repeated order failures', `${n} failed orders in 15 minutes for one account (${dep.symbol}). Last: ${detail}`);
+      const g = await guardRow(pool, dep.username);
+      if (g && guardOnce(`orders-user:${dep.username}`, 30 * 60000)) notifyUser(dep.username, 'broker', 'Safety guard: repeated order failures', `${n} orders failed in the last 15 minutes. Last error: ${detail}. Check your broker connection and your strategies.`, 'dashboard');
+    }
+  } catch (e) { /* best effort */ }
+}
+async function guardCreds(client, username, broker) {
+  const r = await client.query('SELECT api_key_id, api_secret_enc, base_url FROM broker_credentials WHERE username=$1 AND broker=$2', [username, broker]);
+  if (!r.rows.length) return null;
+  return { primary: r.rows[0].api_key_id, secretPlain: decryptSecret(r.rows[0].api_secret_enc), baseUrl: r.rows[0].base_url };
+}
+// Looks up every order whose outcome is unknown (claimed, but the server never recorded the result) and settles it.
+async function guardReconcilePending() {
+  const rows = (await pool.query(`SELECT d.*, g.username AS g_user FROM live_deployments d JOIN safety_guard g ON g.username=d.username AND g.enabled=true WHERE d.entering_coid IS NOT NULL AND d.status IN ('watching','paused','error')`)).rows;
+  for (const dep of rows) {
+    if (liveInFlight.has(dep.id)) continue;
+    const age = Date.now() - new Date(dep.entering_at).getTime();
+    if (age < GUARD_PENDING_MIN_AGE_MS) continue;
+    try {
+      const adapter = getBrokerAdapter(dep.broker);
+      const creds = adapter && adapter.getOrderByClientId ? await guardCreds(pool, dep.username, dep.broker) : null;
+      if (!creds) continue;
+      const found = await adapter.getOrderByClientId(creds, dep.entering_coid);
+      if (found.status === 'error') continue; // broker unreachable: try again next pass, never guess
+      if (found.status === 'none') {
+        if (age >= GUARD_PENDING_CLEAR_MS) {
+          await pool.query('UPDATE live_deployments SET entering_coid=NULL, entering_at=NULL WHERE id=$1 AND entering_coid=$2', [dep.id, dep.entering_coid]);
+          guardLog(dep.username, 'order_not_found', 'info', `${dep.symbol}: an order claimed ${Math.round(age / 1000)}s ago never reached the broker. Cleared, nothing was bought.`);
+        }
+        continue;
+      }
+      const o = found.order, st = String(o.status || '');
+      if (['canceled', 'cancelled', 'rejected', 'expired'].includes(st) && !(parseFloat(o.filled_qty) > 0)) {
+        await pool.query('UPDATE live_deployments SET entering_coid=NULL, entering_at=NULL WHERE id=$1 AND entering_coid=$2', [dep.id, dep.entering_coid]);
+        guardLog(dep.username, 'order_dead', 'info', `${dep.symbol}: the broker ${st} the order. Cleared.`);
+        continue;
+      }
+      // The order exists: adopt it so the platform and the broker agree, instead of ever sending a second one.
+      const entryPrice = parseFloat(o.filled_avg_price) || parseFloat(dep.entering_price);
+      const qty = parseFloat(o.filled_qty) > 0 ? parseFloat(o.filled_qty) : parseFloat(o.qty) || parseFloat(dep.entering_qty);
+      const side = o.side || (dep.direction === 'short' ? 'sell' : 'buy');
+      const tp = parseFloat(dep.take_profit_pct) / 100, sl = parseFloat(dep.stop_loss_pct) / 100, short = dep.direction === 'short';
+      const snap = { at: Date.now(), recovered: true, price: entryPrice, timeframe: dep.timeframe, direction: dep.direction, takeProfitPrice: short ? entryPrice * (1 - tp) : entryPrice * (1 + tp), stopLossPrice: short ? entryPrice * (1 + sl) : entryPrice * (1 - sl), conditions: [], bars: [] };
+      const upd = await pool.query(`UPDATE live_deployments SET status='open', entry_order_id=$1, entry_price=$2, qty=$3, opened_at=now(), trail_peak=$2, entering_coid=NULL, entering_at=NULL, last_error=NULL WHERE id=$4 AND entering_coid=$5`, [o.id, entryPrice, qty, dep.id, dep.entering_coid]);
+      if (!upd.rowCount) continue;
+      const have = await pool.query('SELECT 1 FROM live_trade_log WHERE username=$1 AND entry_order_id=$2', [dep.username, o.id]);
+      if (!have.rows.length) await pool.query(`INSERT INTO live_trade_log (username, strategy_id, strategy_name, broker, symbol, side, qty, entry_order_id, entry_price, opened_at, status, entry_snapshot, leverage) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),'open',$10,$11)`,
+        [dep.username, dep.strategy_id, dep.strategy_name, dep.broker, dep.symbol, side, qty, o.id, entryPrice, JSON.stringify(snap), Math.min(5, Math.max(1, parseFloat(dep.leverage) || 1))]);
+      guardLog(dep.username, 'order_recovered', 'warn', `${dep.symbol}: order ${o.id} (${st}) was found at the broker after an interruption and recorded. No second order was sent.`);
+      notifyUser(dep.username, 'broker', `Recovered ${dep.symbol} order after an interruption`, `An order was placed just as the server was interrupted. Safety guard found it at your broker and recorded it, and did not send another.`, 'portfolio');
+    } catch (e) { console.error('guard reconcile pending error:', e.message); }
+  }
+}
+// Compares what the platform thinks is open with what the broker actually holds.
+async function guardCheckPositions(username) {
+  const deps = (await pool.query(`SELECT * FROM live_deployments WHERE username=$1 AND broker='alpaca' AND status IN ('open','watching','paused')`, [username])).rows;
+  if (!deps.length) return;
+  const adapter = getBrokerAdapter('alpaca');
+  const creds = await guardCreds(pool, username, 'alpaca');
+  if (!creds || !adapter.listPositions) return;
+  const lp = await adapter.listPositions(creds);
+  if (!lp.ok) return;
+  const norm = s => String(s || '').toUpperCase().replace('/', '');
+  const bySym = new Map(lp.positions.map(p => [norm(p.symbol), p]));
+  const finding = (key, kind, msg) => {
+    const k = `${username}|${key}`;
+    const n = (guardStreaks.get(k) || 0) + 1; guardStreaks.set(k, n);
+    if (n < 2) return; // must persist across two passes, so a trade closing right now does not raise a false alarm
+    if (!guardOnce('mm:' + k, 6 * 3600000)) return;
+    guardLog(username, kind, 'error', msg);
+    notifyUser(username, 'broker', 'Safety guard: broker and platform disagree', msg + ' Check your broker account.', 'portfolio');
+    opsAlert('mm:' + k, 'Position mismatch', `${username}: ${msg}`);
+  };
+  const seen = new Set();
+  for (const d of deps) {
+    const key = norm(d.symbol); seen.add(key);
+    const pos = bySym.get(key);
+    if (d.status === 'open') {
+      if (!pos) finding(`flat:${d.id}`, 'mismatch_db_open', `${d.symbol}: ${d.strategy_name || 'a strategy'} shows an open trade but your broker holds no position.`);
+      else {
+        guardStreaks.delete(`${username}|flat:${d.id}`);
+        const bq = Math.abs(parseFloat(pos.qty)), dq = Math.abs(parseFloat(d.qty));
+        if (isFinite(bq) && isFinite(dq) && Math.abs(bq - dq) > 1e-6 * Math.max(1, dq)) finding(`qty:${d.id}`, 'mismatch_qty', `${d.symbol}: the platform recorded ${dq} but your broker holds ${bq}.`);
+        else guardStreaks.delete(`${username}|qty:${d.id}`);
+      }
+    } else if (pos && !deps.some(x => x.status === 'open' && norm(x.symbol) === key) && !d.entering_coid) {
+      finding(`orphan:${key}`, 'mismatch_broker_open', `${d.symbol}: your broker holds a position that no running strategy is tracking (possible duplicate or manual trade).`);
+    } else guardStreaks.delete(`${username}|orphan:${key}`);
+  }
+}
+async function guardMonitorOnce() {
+  // 1. scheduler heartbeat
+  const staleFor = Date.now() - schedulerHealth.lastTickEnd;
+  if (staleFor > SCHEDULER_STALE_MS) {
+    const active = (await pool.query(`SELECT DISTINCT d.username FROM live_deployments d JOIN safety_guard g ON g.username=d.username AND g.enabled=true WHERE d.status IN ('watching','open')`)).rows;
+    opsAlert('scheduler', 'Live scheduler stopped polling', `No live tick has completed for ${Math.round(staleFor / 1000)}s (limit ${Math.round(SCHEDULER_STALE_MS / 1000)}s). ${schedulerHealth.lastTickError ? 'Last error: ' + schedulerHealth.lastTickError : ''}`);
+    for (const u of active) if (guardOnce('sched-user:' + u.username, 30 * 60000)) {
+      guardLog(u.username, 'scheduler_stalled', 'error', `The live engine has not polled for ${Math.round(staleFor / 1000)}s.`);
+      notifyUser(u.username, 'broker', 'Safety guard: live engine stopped polling', 'The engine that watches your strategies has not run for several minutes. Open positions keep their stop-loss at the broker, but no new exits (like trailing stops) are being applied. We have been alerted.', 'dashboard');
+    }
+  }
+  // 2. per-user: halts, reconcile, positions
+  await guardReconcilePending();
+  const users = (await pool.query(`SELECT g.username FROM safety_guard g WHERE g.enabled=true AND EXISTS (SELECT 1 FROM live_deployments d WHERE d.username=g.username AND d.status IN ('watching','open','paused'))`)).rows;
+  for (const u of users) {
+    try {
+      const g = await guardRow(pool, u.username);
+      if (!g) continue;
+      const creds = await guardCreds(pool, u.username, 'alpaca');
+      if (creds) {
+        const a = await getBrokerAdapter('alpaca').fetchAccount(creds);
+        if (a.ok) await guardEvaluate(pool, u.username, g, a.accountSummary);
+      }
+      await guardCheckPositions(u.username);
+    } catch (e) { console.error('guard monitor user error:', u.username, e.message); }
+  }
+  if (Math.random() < 0.01) pool.query(`DELETE FROM guard_events WHERE created_at < now() - interval '30 days'`).catch(() => {});
+}
+app.get('/api/health/scheduler', (req, res) => {
+  const staleFor = Date.now() - schedulerHealth.lastTickEnd;
+  const enabled = process.env.DISABLE_LIVE_TICK !== '1';
+  const ok = !enabled || staleFor <= SCHEDULER_STALE_MS;
+  res.status(ok ? 200 : 503).json({ ok, enabled, lastTickAgoSec: Math.round(staleFor / 1000), staleAfterSec: Math.round(SCHEDULER_STALE_MS / 1000), ticks: schedulerHealth.ticks, lastTickMs: schedulerHealth.lastTickMs, lastError: schedulerHealth.lastTickError });
+});
+function guardPayload(g) {
+  const today = new Date().toISOString().slice(0, 10);
+  return { enabled: !!(g && g.enabled), maxDailyLossPct: g && g.max_daily_loss_pct !== null ? parseFloat(g.max_daily_loss_pct) : null, maxOpenTrades: g ? g.max_open_trades : null, maxLosingStreak: g ? g.max_losing_streak : null,
+    haltedToday: !!(g && g.halted_on === today && g.halted_reason), haltedReason: g && g.halted_on === today ? g.halted_reason : null, streakHalted: !!(g && g.streak_halted), streakReason: g && g.streak_halted ? g.streak_reason : null };
+}
+app.get('/api/guard', requireAuth, async (req, res) => {
+  try {
+    const g = (await pool.query('SELECT * FROM safety_guard WHERE username=$1', [req.username])).rows[0] || null;
+    const ev = (await pool.query('SELECT kind, severity, detail, created_at FROM guard_events WHERE username=$1 ORDER BY id DESC LIMIT 20', [req.username])).rows;
+    const pend = (await pool.query('SELECT COUNT(*)::int AS n FROM live_deployments WHERE username=$1 AND entering_coid IS NOT NULL', [req.username])).rows[0].n;
+    const staleFor = Date.now() - schedulerHealth.lastTickEnd;
+    res.json({ guard: guardPayload(g), pendingOrders: pend, scheduler: { ok: process.env.DISABLE_LIVE_TICK === '1' || staleFor <= SCHEDULER_STALE_MS, lastTickAgoSec: Math.round(staleFor / 1000) }, events: ev.map(e => ({ kind: e.kind, severity: e.severity, detail: e.detail, at: e.created_at })) });
+  } catch (e) { console.error('guard get error:', e.message); res.status(500).json({ error: 'Could not load the safety guard.' }); }
+});
+app.put('/api/guard', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const enabled = b.enabled === true;
+    const dl = numOrNull(b.maxDailyLossPct, 0.1, 100), ot = numOrNull(b.maxOpenTrades, 1, 200, true), ls = numOrNull(b.maxLosingStreak, 1, 50, true);
+    await pool.query(
+      `INSERT INTO safety_guard (username, enabled, max_daily_loss_pct, max_open_trades, max_losing_streak, updated_at) VALUES ($1,$2,$3,$4,$5,now())
+       ON CONFLICT (username) DO UPDATE SET enabled=$2, max_daily_loss_pct=$3, max_open_trades=$4, max_losing_streak=$5, updated_at=now()`,
+      [req.username, enabled, dl, ot, ls]);
+    if (b.resume === true) {
+      await pool.query(`UPDATE safety_guard SET halted_on=NULL, halted_reason=NULL, streak_halted=false, streak_reason=NULL, streak_since=now() WHERE username=$1`, [req.username]);
+      await pool.query(`UPDATE live_deployments SET status='watching', pause_reason=NULL, needs_reset=true, streak_from=now() WHERE username=$1 AND status='paused' AND pause_reason LIKE 'Safety guard:%'`, [req.username]);
+    }
+    guardLog(req.username, 'settings', 'info', enabled ? 'Safety guard switched on.' : 'Safety guard switched off.');
+    const g = (await pool.query('SELECT * FROM safety_guard WHERE username=$1', [req.username])).rows[0];
+    res.json({ ok: true, guard: guardPayload(g) });
+  } catch (e) {
+    if (e.message === 'out of range') return res.status(400).json({ error: 'One of the limits is outside its allowed range.' });
+    console.error('guard put error:', e.message); res.status(500).json({ error: 'Could not save the safety guard.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ENTRY GATE (opt-in per strategy): "Only trade if..." filters and "Pause around big events".
+// Applied only when the entry rule has fired and only to NEW entries. It never closes a position.
+// Filters are an extra AND-only chain evaluated on the same bars. Events are central-bank rate decisions and,
+// when FINNHUB_API_KEY is set, earnings for the symbol. If the calendar cannot be read the gate lets the entry through
+// (a data outage must not silently disable trading) and logs it.
+// ---------------------------------------------------------------------------
+const GATE_MAX_FILTERS = 5;
+function gateSanitizeFilters(list) {
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, GATE_MAX_FILTERS).filter(c => c && typeof c.indicator === 'string' && c.indicator.length <= 40)
+    .map(c => ({ indicator: String(c.indicator).slice(0, 40), operator: String(c.operator || '').slice(0, 80), value: String(c.value === undefined || c.value === null ? '' : c.value).slice(0, 600), language: c.language ? String(c.language).slice(0, 12) : undefined, logic: 'AND' }));
+}
+function gateSanitizeEvents(e) {
+  if (!e || e.enabled !== true) return null;
+  const h = (v, d) => { const n = parseFloat(v); return isFinite(n) && n >= 0 && n <= 72 ? n : d; };
+  return { enabled: true, rates: e.rates !== false, earnings: e.earnings !== false, beforeHours: h(e.beforeHours, 2), afterHours: h(e.afterHours, 2) };
+}
+// Returns the first event whose pause window contains nowMs, or null. Rate decisions have a date but no time, so the whole UTC day is paused.
+function gateEventBlocked(events, nowMs, cfg) {
+  const H = 3600000;
+  for (const e of events || []) {
+    if (e.type === 'rate' && !cfg.rates) continue;
+    if (e.type === 'earnings' && !cfg.earnings) continue;
+    const day0 = Date.parse(e.date + 'T00:00:00Z'); if (!isFinite(day0)) continue;
+    let from = day0, to = day0 + 24 * H;
+    if (e.type === 'earnings' && e.hour === 'bmo') from = to = day0 + 12 * H;
+    else if (e.type === 'earnings' && e.hour === 'amc') from = to = day0 + 21 * H;
+    if (nowMs >= from - cfg.beforeHours * H && nowMs <= to + cfg.afterHours * H) return e;
+  }
+  return null;
+}
+async function entryGate(dep, bars) {
+  try {
+    const r = await pool.query('SELECT filter_conditions, event_pause FROM strategy_gates WHERE username=$1 AND strategy_id=$2', [dep.username, dep.strategy_id]);
+    if (!r.rows.length) return { ok: true };
+    const filters = gateSanitizeFilters(r.rows[0].filter_conditions), ev = gateSanitizeEvents(r.rows[0].event_pause);
+    if (filters.length && bars && bars.length) {
+      const cache = buildIndicatorCache(bars, filters);
+      const a = buildAuditSnapshot(filters, bars, cache);
+      if (a.signal !== true) {
+        const bad = a.details.filter(d => d.passed !== true).map(d => d.currentValueLabel).filter(Boolean).slice(0, 3).join('; ');
+        return { ok: false, kind: 'filter', reason: 'Only-trade-if filter not met' + (bad ? ' (' + bad + ')' : '') + '.' };
+      }
+    }
+    if (ev) {
+      let cal = null;
+      try { cal = await calendarFor([dep.symbol], 3, 1); } catch (e) { cal = null; }
+      if (!cal) { if (guardOnce('gatecal:' + dep.username, 3600000)) guardLog(dep.username, 'gate_calendar', 'warn', 'Event calendar unavailable, so the event pause did not apply to this entry.'); return { ok: true }; }
+      const hit = gateEventBlocked(cal.events, Date.now(), ev);
+      if (hit) return { ok: false, kind: 'event', reason: `Paused around a big event: ${hit.title} (${hit.date}).` };
+    }
+    return { ok: true };
+  } catch (e) { console.error('entry gate error:', e.message); return { ok: true }; }
+}
+// Called when the entry rule fired. Returns true when the entry must be skipped, and records why (at most once per 30 minutes per strategy).
+async function entryGateBlocks(dep, bars) {
+  const g = await entryGate(dep, bars);
+  if (g.ok) return false;
+  if (guardOnce('gate:' + dep.username + ':' + dep.strategy_id + ':' + g.kind, 30 * 60000)) guardLog(dep.username, 'entry_skipped', 'info', `${dep.strategy_name || dep.symbol}: entry skipped. ${g.reason}`);
+  return true;
+}
+app.get('/api/gate/:strategyId', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT filter_conditions, event_pause FROM strategy_gates WHERE username=$1 AND strategy_id=$2', [req.username, String(req.params.strategyId).slice(0, 80)]);
+    res.json({ filterConditions: r.rows[0] ? gateSanitizeFilters(r.rows[0].filter_conditions) : [], eventPause: r.rows[0] ? gateSanitizeEvents(r.rows[0].event_pause) : null });
+  } catch (e) { res.status(500).json({ error: 'Could not load the entry filters.' }); }
+});
+app.put('/api/gate/:strategyId', requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.strategyId).slice(0, 80), b = req.body || {};
+    const f = gateSanitizeFilters(b.filterConditions), ev = gateSanitizeEvents(b.eventPause);
+    if (!f.length && !ev) { await pool.query('DELETE FROM strategy_gates WHERE username=$1 AND strategy_id=$2', [req.username, id]); return res.json({ ok: true, filterConditions: [], eventPause: null }); }
+    await pool.query(`INSERT INTO strategy_gates (username, strategy_id, filter_conditions, event_pause, updated_at) VALUES ($1,$2,$3,$4,now())
+      ON CONFLICT (username, strategy_id) DO UPDATE SET filter_conditions=$3, event_pause=$4, updated_at=now()`, [req.username, id, JSON.stringify(f), ev ? JSON.stringify(ev) : null]);
+    res.json({ ok: true, filterConditions: f, eventPause: ev });
+  } catch (e) { console.error('gate put error:', e.message); res.status(500).json({ error: 'Could not save the entry filters.' }); }
+});
+
 // ---- Fast mode state (streaming ticks) -------------------------------------
 const FAST_MIN_EVAL_MS = parseInt(process.env.FAST_MIN_EVAL_MS, 10) || 1000;     // at most one evaluation per deployment per second
 const FAST_BARS_TTL_MS = parseInt(process.env.FAST_BARS_TTL_MS, 10) || 15000;    // how long fetched bars are reused between ticks
@@ -1513,6 +1849,7 @@ async function runLiveTickForDeploymentInner(dep, client, opts) {
         return;
       }
       if (!signal) return;
+      if (await entryGateBlocks(dep, bars)) { await client.query('UPDATE live_deployments SET last_checked_at=now() WHERE id=$1', [dep.id]); return; }
 
       const acctResult = await adapter.fetchAccount(creds);
       if (!acctResult.ok) {
@@ -1539,8 +1876,13 @@ async function runLiveTickForDeploymentInner(dep, client, opts) {
       const takeProfitPrice = dep.direction === 'short' ? entryPrice * (1 - tp) : entryPrice * (1 + tp);
       const stopLossPrice = dep.direction === 'short' ? entryPrice * (1 + sl) : entryPrice * (1 - sl);
 
+      // Safety guard (opt-in): hard limits + claim the deployment atomically, and send a client_order_id so the order can be found again after a crash.
+      const claim = await guardClaimEntry(client, dep, acctResult.accountSummary, qty, entryPrice);
+      if (!claim.ok) { if (!claim.silent) await client.query('UPDATE live_deployments SET last_error=$1, last_checked_at=now() WHERE id=$2', [claim.reason.slice(0, 500), dep.id]); return; }
+      const guardCoid = claim.coid;
       const orderRes = await adapter.placeOrder(creds, {
         symbol: dep.symbol, qty: String(qty), side, type: 'market', time_in_force: 'day',
+        ...(guardCoid ? { client_order_id: guardCoid } : {}),
         order_class: 'bracket',
         take_profit: { limit_price: takeProfitPrice.toFixed(2) },
         stop_loss: { stop_price: stopLossPrice.toFixed(2) },
@@ -1548,13 +1890,21 @@ async function runLiveTickForDeploymentInner(dep, client, opts) {
       if (!orderRes.ok) {
         const errBody = await orderRes.json().catch(() => ({}));
         const rejMsg = (errBody.message || `Order rejected by ${adapter.name}`).slice(0, 500);
+        if (guardCoid && (orderRes.status >= 500 || orderRes.status === 429 || orderRes.status === 408 || /client_order_id/i.test(rejMsg))) {
+          // Outcome unknown: the order may have been accepted. Keep the claim; reconciliation will look it up by id. Never resend.
+          await client.query('UPDATE live_deployments SET last_error=$1, last_checked_at=now() WHERE id=$2', ['Order status unknown, checking with your broker.', dep.id]);
+          guardRecordOrderFailure(dep, 'status unknown (' + orderRes.status + '): ' + rejMsg);
+          return;
+        }
+        if (guardCoid) await client.query('UPDATE live_deployments SET entering_coid=NULL, entering_at=NULL WHERE id=$1', [dep.id]);
+        guardRecordOrderFailure(dep, rejMsg);
         await client.query('UPDATE live_deployments SET status=$1, last_error=$2, last_checked_at=now() WHERE id=$3', ['error', rejMsg, dep.id]);
         notifyUser(dep.username, 'broker', `${dep.strategy_name || dep.symbol}: order rejected`, rejMsg + ' The strategy has stopped and will not retry, so an order is never sent twice. Check your broker for any order before you redeploy.', 'strategy:' + dep.strategy_id);
         return;
       }
       const order = await orderRes.json();
       await client.query(
-        `UPDATE live_deployments SET status='open', entry_order_id=$1, entry_price=$2, qty=$3, opened_at=now(), last_checked_at=now(), last_error=NULL, trail_peak=$2 WHERE id=$4`,
+        `UPDATE live_deployments SET status='open', entry_order_id=$1, entry_price=$2, qty=$3, opened_at=now(), last_checked_at=now(), last_error=NULL, trail_peak=$2, entering_coid=NULL, entering_at=NULL WHERE id=$4`,
         [order.id, entryPrice, qty, dep.id]
       );
       const entrySnapshot = {
@@ -1626,19 +1976,26 @@ async function runLiveTickForDeploymentInner(dep, client, opts) {
 
 async function runLiveTick() {
   const client = await pool.connect();
+  schedulerHealth.lastTickStart = Date.now();
   try {
     const res = await client.query(`SELECT * FROM live_deployments WHERE status IN ('watching','open') FOR UPDATE SKIP LOCKED`);
     for (const dep of res.rows) {
       await runLiveTickForDeployment(dep, client);
     }
+    schedulerHealth.lastTickError = null;
   } catch (e) {
+    schedulerHealth.lastTickError = String(e.message).slice(0, 200);
     console.error('runLiveTick error:', e.message);
   } finally {
+    schedulerHealth.lastTickEnd = Date.now(); schedulerHealth.lastTickMs = schedulerHealth.lastTickEnd - schedulerHealth.lastTickStart; schedulerHealth.ticks++;
     client.release();
   }
 }
 if (process.env.DISABLE_LIVE_TICK !== '1') {
   setInterval(() => { runLiveTick().catch(e => console.error('live tick loop error:', e.message)); }, LIVE_TICK_INTERVAL_MS);
+  // Safety guard monitor: reconciles unknown orders, checks positions and the scheduler heartbeat. First pass shortly after boot, so a restart settles any in-flight order.
+  setTimeout(() => { guardMonitorOnce().catch(e => console.error('guard monitor error:', e.message)); }, GUARD_PENDING_MIN_AGE_MS + 2000);
+  setInterval(() => { guardMonitorOnce().catch(e => console.error('guard monitor error:', e.message)); }, GUARD_INTERVAL_MS);
 }
 
 // ---- Fast mode: streaming price feed (one Alpaca data socket per user, using that user's own keys) ----
@@ -1752,6 +2109,7 @@ async function runSimTickForDeployment(dep) {
     const audit = buildAuditSnapshot(conditions, bars, cache);
     if (dep.needs_reset) { if (!audit.signal) await pool.query('UPDATE sim_deployments SET needs_reset=false WHERE id=$1', [dep.id]); return; }
     if (!audit.signal) return;
+    if (await entryGateBlocks(dep, bars)) return;
     const last = bars[bars.length - 1], entry = last.close;
     const side = dep.direction === 'short' ? 'sell' : 'buy';
     const notional = SIM_VIRTUAL_EQUITY * (parseFloat(dep.position_size_pct) / 100);
@@ -1807,6 +2165,36 @@ app.post('/api/sim/stop/:strategyId', requireAuth, async (req, res) => {
     }
     res.json({ ok: true });
   } catch (e) { console.error('sim stop error:', e.message); res.status(500).json({ error: 'Could not stop simulated forward-testing.' }); }
+});
+// Close the open simulated trade right now at the latest price. The strategy keeps running and waits for a fresh signal.
+app.post('/api/sim/close/:strategyId', requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.strategyId).slice(0, 80);
+    const open = await pool.query(`SELECT t.id, d.symbol, d.timeframe FROM sim_trade_log t JOIN sim_deployments d ON d.username=t.username AND d.strategy_id=t.strategy_id WHERE t.username=$1 AND t.strategy_id=$2 AND t.status='open'`, [req.username, id]);
+    if (!open.rows.length) return res.status(404).json({ error: 'There is no open simulated trade for this strategy.' });
+    let closed = 0;
+    for (const t of open.rows) {
+      const hit = simBarsCache.get(`${t.symbol}|${t.timeframe}`);
+      const px = hit && hit.bars.length ? hit.bars[hit.bars.length - 1].close : null;
+      if (px === null) return res.status(409).json({ error: 'The latest price is not loaded yet. Try again in a minute.' });
+      const r = await pool.query(`UPDATE sim_trade_log SET status='closed', closed_at=now(), exit_price=$2, close_reason='manual' WHERE id=$1 AND status='open'`, [t.id, px]);
+      closed += r.rowCount;
+    }
+    // Wait for a fresh signal before entering again, so the trade just closed is not reopened on the same bar.
+    await pool.query(`UPDATE sim_deployments SET needs_reset=true WHERE username=$1 AND strategy_id=$2 AND status IN ('watching','open')`, [req.username, id]);
+    await pool.query(`UPDATE sim_deployments SET status='watching' WHERE username=$1 AND strategy_id=$2 AND status='open'`, [req.username, id]);
+    res.json({ ok: true, closed });
+  } catch (e) { console.error('sim close error:', e.message); res.status(500).json({ error: 'Could not close the simulated trade.' }); }
+});
+// Delete closed simulated trades (all of them, or one strategy's). Open trades are never deleted.
+app.post('/api/sim/clear', requireAuth, async (req, res) => {
+  try {
+    const sid = req.body && req.body.strategyId ? String(req.body.strategyId).slice(0, 80) : null;
+    const r = sid
+      ? await pool.query(`DELETE FROM sim_trade_log WHERE username=$1 AND strategy_id=$2 AND status='closed'`, [req.username, sid])
+      : await pool.query(`DELETE FROM sim_trade_log WHERE username=$1 AND status='closed'`, [req.username]);
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (e) { console.error('sim clear error:', e.message); res.status(500).json({ error: 'Could not clear practice history.' }); }
 });
 app.get('/api/sim/status', requireAuth, async (req, res) => {
   try { res.json({ deployments: (await pool.query('SELECT strategy_id, symbol, timeframe, status, last_error, last_checked_at, data_source, created_at FROM sim_deployments WHERE username=$1', [req.username])).rows }); }
@@ -4103,6 +4491,22 @@ BrokerAdapters.alpaca = {
   async getPosition(creds, symbol) {
     return alpacaRequest(creds.baseUrl, creds.primary, creds.secretPlain, `/v2/positions/${encodeURIComponent(symbol)}`);
   },
+  async listPositions(creds) {
+    try {
+      const res = await alpacaRequest(creds.baseUrl, creds.primary, creds.secretPlain, '/v2/positions');
+      if (!res.ok) return { ok: false };
+      return { ok: true, positions: await res.json() };
+    } catch (e) { return { ok: false }; }
+  },
+  // Looks an order up by the client_order_id we sent. status: found | none (broker has no such order) | error (could not tell).
+  async getOrderByClientId(creds, coid) {
+    try {
+      const res = await alpacaRequest(creds.baseUrl, creds.primary, creds.secretPlain, `/v2/orders:by_client_order_id?client_order_id=${encodeURIComponent(coid)}`);
+      if (res.status === 404) return { status: 'none' };
+      if (!res.ok) return { status: 'error' };
+      return { status: 'found', order: await res.json() };
+    } catch (e) { return { status: 'error' }; }
+  },
   async closePosition(creds, symbol) {
     return (await alpacaClosePositionRobust(creds.baseUrl, creds.primary, creds.secretPlain, symbol)).res;
   },
@@ -4861,8 +5265,8 @@ async function fetchEarnings(symbol, from, to) {
   } catch (e) { console.error('earnings fetch failed:', symbol, e.message); return hit ? hit.rows : []; }
 }
 const ymd = (d) => d.toISOString().slice(0, 10);
-async function calendarFor(symbols, days) {
-  const from = ymd(new Date()), to = ymd(new Date(Date.now() + days * 86400000));
+async function calendarFor(symbols, days, back) {
+  const from = ymd(new Date(Date.now() - (back || 0) * 86400000)), to = ymd(new Date(Date.now() + days * 86400000));
   const syms = [...new Set(symbols.map(s => String(s).toUpperCase()))].slice(0, 25);
   const events = [];
   [...MACRO_EVENTS, ...macroExtra].filter(e => e.date >= from && e.date <= to).forEach(e => {
